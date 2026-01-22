@@ -1,0 +1,38 @@
+# Node / Next
+node_modules/
+.next/
+.turbo/
+dist/
+out/
+devlog.txt
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Editor/IDE
+.vscode/
+.idea/
+*.iml
+
+# Python
+__pycache__/
+*.pyc
+
+# Android / Gradle
+**/.gradle/
+**/build/
+local.properties
+*.keystore
+*.jks
+
+# Misc
+*.env
+*.env.local
