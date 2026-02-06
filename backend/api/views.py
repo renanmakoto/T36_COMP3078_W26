@@ -1,6 +1,8 @@
 from datetime import datetime, time, timedelta
 
 from django.db import IntegrityError
+from django.db.models import Count, F, Q
+from django.db.models.functions import TruncDate, TruncMonth
 from django.utils import timezone
 from rest_framework import generics, status
 from rest_framework.exceptions import ValidationError
@@ -10,7 +12,10 @@ from rest_framework.views import APIView
 from rest_framework_simplejwt.views import TokenObtainPairView
 
 from .models import Appointment, AppointmentStatus, Service
+from .permissions import IsAdmin
 from .serializers import (
+    AdminAppointmentSerializer,
+    AdminAppointmentUpdateSerializer,
     AppointmentCreateSerializer,
     AppointmentSerializer,
     AppointmentUpdateSerializer,
@@ -225,5 +230,192 @@ class AppointmentUpdateView(APIView):
 
         return Response(
             AppointmentSerializer(appointment).data,
+            status=status.HTTP_200_OK,
+        )
+
+
+# ---------------------------------------------------------------------------
+# Admin APIs
+# ---------------------------------------------------------------------------
+
+
+class AdminAppointmentListView(APIView):
+    """GET /admin/appointments – list all appointments (admin only)."""
+
+    permission_classes = [IsAuthenticated, IsAdmin]
+
+    def get(self, request):
+        qs = Appointment.objects.select_related("service", "user").order_by("-start_time")
+
+        # Optional filters
+        status_filter = request.query_params.get("status")
+        if status_filter:
+            qs = qs.filter(status=status_filter.upper())
+
+        date_filter = request.query_params.get("date")
+        if date_filter:
+            try:
+                target = datetime.strptime(date_filter, "%Y-%m-%d").date()
+            except ValueError:
+                raise ValidationError({"date": "date must be in YYYY-MM-DD format."})
+            tz = timezone.get_current_timezone()
+            day_start = timezone.make_aware(datetime.combine(target, time.min), tz)
+            day_end = timezone.make_aware(datetime.combine(target, time.max), tz)
+            qs = qs.filter(start_time__range=(day_start, day_end))
+
+        return Response(
+            AdminAppointmentSerializer(qs, many=True).data,
+            status=status.HTTP_200_OK,
+        )
+
+
+class AdminAppointmentUpdateView(APIView):
+    """PATCH /admin/appointments/:id – edit / cancel / change status (admin only)."""
+
+    permission_classes = [IsAuthenticated, IsAdmin]
+
+    def patch(self, request, appointment_id):
+        serializer = AdminAppointmentUpdateSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        appointment = (
+            Appointment.objects.filter(id=appointment_id)
+            .select_related("service", "user")
+            .first()
+        )
+        if not appointment:
+            return Response(status=status.HTTP_404_NOT_FOUND)
+
+        action = serializer.validated_data["action"]
+
+        if action == "cancel":
+            appointment.status = AppointmentStatus.CANCELLED
+            appointment.save(update_fields=["status"])
+            return Response(
+                AdminAppointmentSerializer(appointment).data,
+                status=status.HTTP_200_OK,
+            )
+
+        if action == "change_status":
+            new_status = serializer.validated_data["status"]
+            appointment.status = new_status
+            appointment.save(update_fields=["status"])
+            return Response(
+                AdminAppointmentSerializer(appointment).data,
+                status=status.HTTP_200_OK,
+            )
+
+        # action == "reschedule"
+        tz = timezone.get_current_timezone()
+        date_value = serializer.validated_data["date"]
+        time_value = serializer.validated_data["start_time"]
+
+        _ensure_aligned(time_value)
+        start_dt = timezone.make_aware(datetime.combine(date_value, time_value), tz)
+        end_dt = start_dt + timedelta(minutes=appointment.service.duration_minutes)
+        _ensure_within_business_hours(start_dt, end_dt)
+        _ensure_no_conflict(start_dt, end_dt, exclude_id=appointment.id)
+
+        appointment.start_time = start_dt
+        appointment.end_time = end_dt
+        appointment.status = AppointmentStatus.CONFIRMED
+        appointment.save(update_fields=["start_time", "end_time", "status"])
+
+        return Response(
+            AdminAppointmentSerializer(appointment).data,
+            status=status.HTTP_200_OK,
+        )
+
+
+# ---------------------------------------------------------------------------
+# Analytics endpoints
+# ---------------------------------------------------------------------------
+
+
+class AnalyticsBookingsPerDayView(APIView):
+    """GET /admin/analytics/bookings-per-day?month=YYYY-MM"""
+
+    permission_classes = [IsAuthenticated, IsAdmin]
+
+    def get(self, request):
+        month_param = request.query_params.get("month")
+        qs = Appointment.objects.exclude(status=AppointmentStatus.CANCELLED)
+
+        if month_param:
+            try:
+                year, month = month_param.split("-")
+                year, month = int(year), int(month)
+            except (ValueError, AttributeError):
+                raise ValidationError({"month": "month must be in YYYY-MM format."})
+            qs = qs.filter(start_time__year=year, start_time__month=month)
+
+        data = (
+            qs.annotate(date=TruncDate("start_time"))
+            .values("date")
+            .annotate(count=Count("id"))
+            .order_by("date")
+        )
+        return Response(list(data), status=status.HTTP_200_OK)
+
+
+class AnalyticsBookingsPerMonthView(APIView):
+    """GET /admin/analytics/bookings-per-month?year=YYYY"""
+
+    permission_classes = [IsAuthenticated, IsAdmin]
+
+    def get(self, request):
+        year_param = request.query_params.get("year")
+        qs = Appointment.objects.exclude(status=AppointmentStatus.CANCELLED)
+
+        if year_param:
+            try:
+                year = int(year_param)
+            except ValueError:
+                raise ValidationError({"year": "year must be an integer (e.g. 2025)."})
+            qs = qs.filter(start_time__year=year)
+
+        data = (
+            qs.annotate(month=TruncMonth("start_time"))
+            .values("month")
+            .annotate(count=Count("id"))
+            .order_by("month")
+        )
+        return Response(list(data), status=status.HTTP_200_OK)
+
+
+class AnalyticsTopServicesView(APIView):
+    """GET /admin/analytics/top-services"""
+
+    permission_classes = [IsAuthenticated, IsAdmin]
+
+    def get(self, request):
+        qs = Appointment.objects.exclude(status=AppointmentStatus.CANCELLED)
+        data = (
+            qs.values(service_name=F("service__name"))
+            .annotate(count=Count("id"))
+            .order_by("-count")[:10]
+        )
+        return Response(list(data), status=status.HTTP_200_OK)
+
+
+class AnalyticsNoShowRateView(APIView):
+    """GET /admin/analytics/no-show-rate"""
+
+    permission_classes = [IsAuthenticated, IsAdmin]
+
+    def get(self, request):
+        total = Appointment.objects.exclude(
+            status=AppointmentStatus.CANCELLED
+        ).count()
+        no_shows = Appointment.objects.filter(
+            status=AppointmentStatus.NO_SHOW
+        ).count()
+        rate = (no_shows / total * 100) if total > 0 else 0.0
+        return Response(
+            {
+                "total_appointments": total,
+                "no_shows": no_shows,
+                "no_show_rate_percent": round(rate, 2),
+            },
             status=status.HTTP_200_OK,
         )

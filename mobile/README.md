@@ -1,6 +1,6 @@
 # Hair Stylist Booking Web Application  
 
-**Course:** COMP3074 — Project UI Prototype  
+**Course:** Capstone Project — UI Prototype  
 **Group Number:** 33  
 
 ## Project Overview
@@ -52,5 +52,5 @@ This repository contains only the **UI prototype** for the Hair Stylist Booking 
 
 ---
 
-**© 2025 Group 33 — COMP3074 Hair Stylist Booking Web Application**
+**© 2025 Group 33 — BrazWebDes Hair Stylist Booking Web Application**
 
