@@ -1,5 +1,6 @@
 import Fastify from 'fastify';
 import prisma from './lib/prisma';
+import { authRoutes } from './routes/auth';
 
 const app = Fastify({ logger: true });
 
@@ -13,5 +14,7 @@ app.get('/health', async () => {
 
   return { status: 'ok', db };
 });
+
+app.register(authRoutes, { prefix: '/auth' });
 
 export default app;
