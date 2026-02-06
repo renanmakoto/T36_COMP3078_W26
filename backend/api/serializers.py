@@ -2,7 +2,7 @@ from django.contrib.auth import get_user_model
 from rest_framework import serializers
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 
-from .models import Service
+from .models import Appointment, Service
 
 User = get_user_model()
 
@@ -44,3 +44,31 @@ class ServiceSerializer(serializers.ModelSerializer):
     class Meta:
         model = Service
         fields = ("id", "name", "description", "duration_minutes", "price_cents")
+
+
+class AppointmentSerializer(serializers.ModelSerializer):
+    service = ServiceSerializer()
+
+    class Meta:
+        model = Appointment
+        fields = ("id", "service", "start_time", "end_time", "status", "created_at")
+
+
+class AppointmentCreateSerializer(serializers.Serializer):
+    service_id = serializers.UUIDField()
+    date = serializers.DateField()
+    start_time = serializers.TimeField()
+
+
+class AppointmentUpdateSerializer(serializers.Serializer):
+    action = serializers.ChoiceField(choices=("cancel", "reschedule"))
+    date = serializers.DateField(required=False)
+    start_time = serializers.TimeField(required=False)
+
+    def validate(self, attrs):
+        if attrs.get("action") == "reschedule":
+            if not attrs.get("date") or not attrs.get("start_time"):
+                raise serializers.ValidationError(
+                    "date and start_time are required for reschedule."
+                )
+        return attrs
