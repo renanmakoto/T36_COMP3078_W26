@@ -187,4 +187,124 @@ export async function appointmentsRoutes(app: FastifyInstance) {
 
     return { upcoming, past };
   });
+
+  app.patch('/:id', { preHandler: requireAuth }, async (request, reply) => {
+    const { id } = request.params as { id: string };
+    const body = request.body as { action?: 'cancel' | 'reschedule'; date?: string; startTime?: string };
+
+    if (!body.action) {
+      return reply.status(400).send({ error: 'action is required.' });
+    }
+
+    const appointment = await prisma.appointment.findUnique({
+      where: { id },
+      select: { id: true, userId: true, serviceId: true, status: true },
+    });
+
+    if (!appointment) {
+      return reply.status(404).send({ error: 'Appointment not found.' });
+    }
+
+    if (appointment.userId !== request.user!.userId) {
+      return reply.status(403).send({ error: 'Forbidden.' });
+    }
+
+    if (body.action === 'cancel') {
+      const updated = await prisma.appointment.update({
+        where: { id },
+        data: { status: 'CANCELLED' },
+        select: {
+          id: true,
+          serviceId: true,
+          startTime: true,
+          endTime: true,
+          status: true,
+        },
+      });
+
+      return reply.send(updated);
+    }
+
+    if (body.action !== 'reschedule') {
+      return reply.status(400).send({ error: 'Invalid action.' });
+    }
+
+    if (appointment.status === 'CANCELLED') {
+      return reply.status(400).send({ error: 'Cancelled appointments cannot be rescheduled.' });
+    }
+
+    const { date, startTime } = body;
+    if (!date || !startTime) {
+      return reply.status(400).send({ error: 'date and startTime are required for reschedule.' });
+    }
+
+    if (!isValidDate(date) || !isValidTime(startTime)) {
+      return reply.status(400).send({ error: 'Invalid date or time format.' });
+    }
+
+    const startMinutes = minutesSinceMidnight(startTime);
+    if (startMinutes % SLOT_MINUTES !== 0) {
+      return reply.status(400).send({ error: 'startTime must align to 15-minute slots.' });
+    }
+
+    const service = await prisma.service.findUnique({
+      where: { id: appointment.serviceId },
+      select: { durationMinutes: true },
+    });
+
+    if (!service) {
+      return reply.status(404).send({ error: 'Service not found.' });
+    }
+
+    const startDateTime = new Date(`${date}T${startTime}:00`);
+    if (Number.isNaN(startDateTime.getTime())) {
+      return reply.status(400).send({ error: 'Invalid startTime or date.' });
+    }
+
+    const endDateTime = new Date(startDateTime);
+    endDateTime.setMinutes(endDateTime.getMinutes() + service.durationMinutes);
+
+    const endMinutes = startMinutes + service.durationMinutes;
+    if (startMinutes < OPEN_MINUTES || endMinutes > CLOSE_MINUTES) {
+      return reply.status(400).send({ error: 'Appointment must be within business hours.' });
+    }
+
+    const updated = await prisma.$transaction(async (tx) => {
+      const conflict = await tx.appointment.findFirst({
+        where: {
+          id: { not: appointment.id },
+          status: { not: 'CANCELLED' },
+          startTime: { lt: endDateTime },
+          endTime: { gt: startDateTime },
+        },
+        select: { id: true },
+      });
+
+      if (conflict) {
+        return null;
+      }
+
+      return tx.appointment.update({
+        where: { id: appointment.id },
+        data: {
+          startTime: startDateTime,
+          endTime: endDateTime,
+          status: 'CONFIRMED',
+        },
+        select: {
+          id: true,
+          serviceId: true,
+          startTime: true,
+          endTime: true,
+          status: true,
+        },
+      });
+    });
+
+    if (!updated) {
+      return reply.status(409).send({ error: 'Time slot unavailable.' });
+    }
+
+    return reply.send(updated);
+  });
 }
