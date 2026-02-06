@@ -69,10 +69,27 @@ class Service(models.Model):
         return self.name
 
 
+class AddOn(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    name = models.CharField(max_length=255)
+    description = models.TextField(blank=True)
+    price_cents = models.PositiveIntegerField()
+    duration_minutes = models.PositiveIntegerField(default=0)
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        indexes = [models.Index(fields=["is_active"])]
+
+    def __str__(self) -> str:
+        return self.name
+
+
 class AppointmentStatus(models.TextChoices):
     PENDING = "PENDING", "Pending"
     CONFIRMED = "CONFIRMED", "Confirmed"
     CANCELLED = "CANCELLED", "Cancelled"
+    NO_SHOW = "NO_SHOW", "No Show"
 
 
 class Appointment(models.Model):
@@ -81,6 +98,7 @@ class Appointment(models.Model):
         User, related_name="appointments", on_delete=models.CASCADE
     )
     service = models.ForeignKey(Service, on_delete=models.PROTECT)
+    add_ons = models.ManyToManyField(AddOn, blank=True, related_name="appointments")
     start_time = models.DateTimeField()
     end_time = models.DateTimeField()
     status = models.CharField(

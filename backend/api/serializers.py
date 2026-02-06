@@ -2,7 +2,7 @@ from django.contrib.auth import get_user_model
 from rest_framework import serializers
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 
-from .models import Appointment, Service
+from .models import AddOn, Appointment, Service
 
 User = get_user_model()
 
@@ -11,6 +11,12 @@ class UserSerializer(serializers.ModelSerializer):
     class Meta:
         model = User
         fields = ("id", "email", "role", "is_active", "created_at")
+
+
+class AddOnSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = AddOn
+        fields = ("id", "name", "description", "price_cents", "duration_minutes")
 
 
 class RegisterSerializer(serializers.Serializer):
@@ -79,5 +85,63 @@ class AppointmentUpdateSerializer(serializers.Serializer):
             if not attrs.get("date") or not attrs.get("start_time"):
                 raise serializers.ValidationError(
                     "date and start_time are required for reschedule."
+                )
+        return attrs
+
+
+# ---------------------------------------------------------------------------
+# Admin serializers
+# ---------------------------------------------------------------------------
+
+
+class AdminAppointmentSerializer(serializers.ModelSerializer):
+    """Appointment representation for admin – includes user and service detail."""
+
+    service = ServiceSerializer()
+    user = UserSerializer()
+
+    class Meta:
+        model = Appointment
+        fields = (
+            "id",
+            "user",
+            "service",
+            "start_time",
+            "end_time",
+            "status",
+            "created_at",
+        )
+
+
+class AdminAppointmentUpdateSerializer(serializers.Serializer):
+    """
+    Admins can: cancel, reschedule, or change status of any appointment.
+    """
+
+    action = serializers.ChoiceField(choices=("cancel", "reschedule", "change_status"))
+    status = serializers.ChoiceField(
+        choices=("PENDING", "CONFIRMED", "CANCELLED", "NO_SHOW"),
+        required=False,
+    )
+    date = serializers.DateField(
+        required=False,
+        error_messages={"invalid": "date must be in YYYY-MM-DD format."},
+    )
+    start_time = serializers.TimeField(
+        required=False,
+        error_messages={"invalid": "start_time must be in HH:MM format."},
+    )
+
+    def validate(self, attrs):
+        action = attrs.get("action")
+        if action == "reschedule":
+            if not attrs.get("date") or not attrs.get("start_time"):
+                raise serializers.ValidationError(
+                    "date and start_time are required for reschedule."
+                )
+        elif action == "change_status":
+            if not attrs.get("status"):
+                raise serializers.ValidationError(
+                    "status is required for change_status action."
                 )
         return attrs
