@@ -24,6 +24,16 @@ function minutesSinceMidnight(value: string) {
   return h * 60 + m;
 }
 
+function formatDate(value: Date) {
+  return value.toISOString().slice(0, 10);
+}
+
+function formatTime(value: Date) {
+  const h = String(value.getHours()).padStart(2, '0');
+  const m = String(value.getMinutes()).padStart(2, '0');
+  return `${h}:${m}`;
+}
+
 export async function appointmentsRoutes(app: FastifyInstance) {
   app.post('/', { preHandler: requireAuth }, async (request, reply) => {
     const body = request.body as { serviceId?: string; startTime?: string; date?: string };
@@ -109,5 +119,72 @@ export async function appointmentsRoutes(app: FastifyInstance) {
       request.log.error(err);
       return reply.status(500).send({ error: 'Unable to create appointment.' });
     }
+  });
+
+  app.get('/', { preHandler: requireAuth }, async (request, reply) => {
+    const { me, status } = request.query as { me?: string; status?: string };
+
+    if (me !== 'true') {
+      return reply.status(400).send({ error: 'Query param me=true is required.' });
+    }
+
+    const where: {
+      userId: string;
+      status?: 'PENDING' | 'CONFIRMED' | 'CANCELLED';
+    } = {
+      userId: request.user!.userId,
+    };
+
+    if (status) {
+      const allowed = ['PENDING', 'CONFIRMED', 'CANCELLED'];
+      if (!allowed.includes(status)) {
+        return reply.status(400).send({ error: 'Invalid status filter.' });
+      }
+      where.status = status as 'PENDING' | 'CONFIRMED' | 'CANCELLED';
+    }
+
+    const appointments = await prisma.appointment.findMany({
+      where,
+      orderBy: { startTime: 'asc' },
+      select: {
+        id: true,
+        startTime: true,
+        endTime: true,
+        status: true,
+        service: {
+          select: { id: true, name: true, durationMinutes: true, priceCents: true },
+        },
+      },
+    });
+
+    const now = new Date();
+    const upcoming: Array<{
+      id: string;
+      date: string;
+      startTime: string;
+      endTime: string;
+      status: string;
+      service: { id: string; name: string; durationMinutes: number; priceCents: number };
+    }> = [];
+    const past: typeof upcoming = [];
+
+    for (const appt of appointments) {
+      const item = {
+        id: appt.id,
+        date: formatDate(appt.startTime),
+        startTime: formatTime(appt.startTime),
+        endTime: formatTime(appt.endTime),
+        status: appt.status,
+        service: appt.service,
+      };
+
+      if (appt.endTime < now) {
+        past.push(item);
+      } else {
+        upcoming.push(item);
+      }
+    }
+
+    return { upcoming, past };
   });
 }
