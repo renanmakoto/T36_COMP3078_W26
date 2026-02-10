@@ -8,7 +8,7 @@ export default function SignUpPage() {
     <div className="mx-auto max-w-xl space-y-6 rounded-3xl bg-white p-8 shadow-sm">
       <h1 className="text-3xl font-bold text-[#0f0a1e]">Create account (mock)</h1>
       <p className="text-sm text-[#5a5872]">
-        Placeholder screen for this sprint. Backend/persistence will be added later. Click “Save” to return.
+        Placeholder screen for this sprint. Backend and persistence will be added later. Click "Save" to return.
       </p>
 
       <div className="space-y-4">
@@ -39,3 +39,4 @@ function Field({ label, type = 'text' }: { label: string; type?: string }) {
     </div>
   );
 }
+

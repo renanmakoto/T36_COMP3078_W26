@@ -2,7 +2,6 @@ package com.example.uiprototypebeta
 
 import android.os.Bundle
 import android.widget.CalendarView
-import android.widget.TextView
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import com.example.uiprototypebeta.databinding.ActivityBookingScheduleBinding
@@ -19,25 +18,40 @@ class BookingScheduleActivity : AppCompatActivity() {
     private var selectedSlot: String? = null
     private var availableSlots: List<String> = emptyList()
 
+    // When rescheduling, this will be set; otherwise null for new bookings
+    private var bookingId: String? = null
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         b = ActivityBookingScheduleBinding.inflate(layoutInflater)
         setContentView(b.root)
 
-        val serviceId = intent.getStringExtra("service_id") ?: return finish()
-        val serviceTitle = intent.getStringExtra("service_title") ?: ""
-        val servicePrice = intent.getIntExtra("service_price", 0)
-        val serviceDuration = intent.getIntExtra("service_duration", 0)
-        val addBrows = intent.getBooleanExtra("add_brows", false)
+        bookingId = intent.getStringExtra("booking_id")
+
+        val existingBooking = bookingId?.let { id ->
+            BookingStore.getAllBookings().find { it.id == id }
+        }
+
+        val serviceId = existingBooking?.serviceId ?: intent.getStringExtra("service_id") ?: return finish()
+        val serviceTitle = existingBooking?.serviceTitle ?: intent.getStringExtra("service_title").orEmpty()
+        val servicePrice = existingBooking?.price ?: intent.getIntExtra("service_price", 0)
+        val serviceDuration = existingBooking?.durationMinutes ?: intent.getIntExtra("service_duration", 0)
+        val addBrows = existingBooking?.addBrows ?: intent.getBooleanExtra("add_brows", false)
         val addBrowsPrice = intent.getIntExtra("add_brows_price", 0)
         val addBrowsDuration = intent.getIntExtra("add_brows_duration", 0)
 
         b.toolbar.setNavigationOnClickListener { finish() }
         b.tvServiceSummary.text = buildSummary(serviceTitle, servicePrice, addBrows, addBrowsPrice)
 
-        val today = Calendar.getInstance()
-        setSelectedDate(today)
+        val calStart = Calendar.getInstance()
+        if (existingBooking != null) {
+            calStart.timeInMillis = existingBooking.startMillis
+        }
+        setSelectedDate(calStart)
         loadSlotsForDate(selectedDateKey!!)
+        if (existingBooking != null) {
+            selectedSlot = SimpleDateFormat("h:mm a", Locale.getDefault()).format(calStart.time)
+        }
 
         b.calendarBooking.setOnDateChangeListener { _: CalendarView, year: Int, month: Int, dayOfMonth: Int ->
             val cal = Calendar.getInstance().apply {
@@ -66,10 +80,29 @@ class BookingScheduleActivity : AppCompatActivity() {
                     append("\nPrice: $$totalPrice")
                 }.toString()
 
-                Toast.makeText(this, "Booked!", Toast.LENGTH_SHORT).show()
-                // --- MOCK BOOKING DATA START ---
+                Toast.makeText(this, "Saved!", Toast.LENGTH_SHORT).show()
+                // --- MOCK BOOKING DATA + SHARED BOOKING START ---
                 holdSlot(date, slot, serviceDuration, if (addBrows) addBrowsDuration else 0)
-                // --- MOCK BOOKING DATA END ---
+
+                val startMillis = buildStartMillisFromDateAndTime(date, slot)
+                val name = if (UserSession.displayName.isNotBlank()) UserSession.displayName else "Guest"
+                if (UserSession.isLoggedIn) {
+                    val existingId = bookingId
+                    if (existingId != null) {
+                        BookingStore.rescheduleBooking(existingId, startMillis)
+                    } else {
+                        BookingStore.addBooking(
+                            userName = name,
+                            serviceId = serviceId,
+                            serviceTitle = serviceTitle,
+                            startMillis = startMillis,
+                            durationMinutes = serviceDuration + if (addBrows) addBrowsDuration else 0,
+                            price = totalPrice,
+                            addBrows = addBrows
+                        )
+                    }
+                }
+                // --- MOCK BOOKING DATA + SHARED BOOKING END ---
 
                 finish()
             } else {
@@ -157,5 +190,11 @@ class BookingScheduleActivity : AppCompatActivity() {
 
     private fun dateKey(cal: Calendar): String {
         return SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(cal.time)
+    }
+
+    private fun buildStartMillisFromDateAndTime(dateKey: String, slot: String): Long {
+        val format = SimpleDateFormat("yyyy-MM-dd h:mm a", Locale.getDefault())
+        val parsed = format.parse("$dateKey $slot")
+        return parsed?.time ?: System.currentTimeMillis()
     }
 }

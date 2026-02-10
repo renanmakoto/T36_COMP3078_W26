@@ -1,5 +1,6 @@
 'use client';
 
+import Link from 'next/link';
 import { FormEvent, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useSession } from '../session-context';
@@ -19,7 +20,7 @@ export default function LoginPage() {
       loginUser(DEMO_USER.name);
       router.push('/user/dashboard');
     } else {
-      setError('Credenciais inválidas (use user@example.com / password123)');
+      setError('Invalid credentials (use user@example.com / password123).');
     }
   }
 
@@ -53,8 +54,8 @@ export default function LoginPage() {
         </div>
         {error && <p className="text-sm text-red-600">{error}</p>}
         <button
-            type="submit"
-            className="w-full rounded-xl bg-[#1a132f] px-4 py-3 text-white font-semibold shadow-sm hover:brightness-110"
+          type="submit"
+          className="w-full rounded-xl bg-[#1a132f] px-4 py-3 text-white font-semibold shadow-sm hover:brightness-110"
         >
           Sign in
         </button>
@@ -64,9 +65,9 @@ export default function LoginPage() {
         <p>
           Need an account? Use the (placeholder) sign-up screen or continue as guest on the homepage and services.
         </p>
-        <a className="font-semibold text-[#5b4fe5] hover:underline" href="/signup">
+        <Link className="font-semibold text-[#5b4fe5] hover:underline" href="/signup">
           Go to sign up
-        </a>
+        </Link>
       </div>
     </div>
   );

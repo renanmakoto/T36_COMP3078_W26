@@ -19,7 +19,7 @@ export default function AdminLoginPage() {
       loginAdmin();
       router.push('/admin/dashboard');
     } else {
-      setError('Credenciais inválidas (use admin / 123)');
+      setError('Invalid credentials (use admin / 123).');
     }
   }
 
@@ -60,8 +60,9 @@ export default function AdminLoginPage() {
       </form>
 
       <div className="text-sm text-[#5a5872]">
-        <p>Quick switch? Use the top menu and choose “Admin”.</p>
+        <p>Quick switch? Use the top menu and choose "Admin".</p>
       </div>
     </div>
   );
 }
+

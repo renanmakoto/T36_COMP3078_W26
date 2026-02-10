@@ -118,7 +118,15 @@ open class BaseDrawerActivity : AppCompatActivity() {
 
     private fun onAdminClicked() {
         clearNavSelection()
-        if (this !is AdminLoginActivity) startActivity(Intent(this, AdminLoginActivity::class.java))
+        if (AdminSession.isLoggedIn) {
+            if (this !is AdminDashboardActivity) {
+                startActivity(Intent(this, AdminDashboardActivity::class.java))
+            }
+        } else {
+            if (this !is AdminLoginActivity) {
+                startActivity(Intent(this, AdminLoginActivity::class.java))
+            }
+        }
         drawerLayout.closeDrawer(GravityCompat.END)
     }
 

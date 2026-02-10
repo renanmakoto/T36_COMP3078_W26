@@ -4,12 +4,18 @@ import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 
 const mainServices = [
-  { id: 'haircut', title: 'Haircut', desc: 'Fresh fade ou clássico', price: 20, duration: 45 },
-  { id: 'beard', title: 'Beard', desc: 'Lineup, trim e finalização', price: 15, duration: 30 },
-  { id: 'combo', title: 'Haircut & Beard', desc: 'Pacote completo', price: 25, duration: 60 },
+  { id: 'haircut', title: 'Haircut', desc: 'Fresh fade or classic cut.', price: 20, duration: 45 },
+  { id: 'beard', title: 'Beard', desc: 'Lineup, trim, and finish.', price: 15, duration: 30 },
+  { id: 'combo', title: 'Haircut & Beard', desc: 'Complete package for hair and beard.', price: 25, duration: 60 },
 ];
 
-const addOn = { id: 'brows', title: 'Eyebrows', desc: 'Shaping e trimming', price: 5, duration: 15 };
+const addOn = {
+  id: 'brows',
+  title: 'Eyebrows',
+  desc: 'Eyebrow shaping and trimming.',
+  price: 5,
+  duration: 15,
+};
 
 export default function BookingPage() {
   const router = useRouter();
@@ -27,7 +33,7 @@ export default function BookingPage() {
             <p className="text-sm text-[#7b7794]">Step 1</p>
             <h1 className="text-3xl font-bold text-[#0f0a1e]">Choose the service</h1>
           </div>
-          <p className="text-sm text-[#5a5872]">Slots in 15-min intervals</p>
+          <p className="text-sm text-[#5a5872]">Slots in 15-minute intervals</p>
         </div>
 
         <div className="mt-6 grid gap-4 md:grid-cols-3">
@@ -75,9 +81,9 @@ export default function BookingPage() {
 
         <div className="mt-6 flex items-center justify-between rounded-2xl bg-[#0f0a1e] px-4 py-3 text-white">
           <div>
-            <p className="text-sm text-[#c7c3de]">Resumo</p>
+            <p className="text-sm text-[#c7c3de]">Summary</p>
             <p className="text-lg font-semibold">
-              {chosen ? chosen.title : 'Selecione um serviço'}
+              {chosen ? chosen.title : 'Select a service'}
               {includeBrows && chosen ? ' + Brows' : ''}
             </p>
           </div>
@@ -108,3 +114,4 @@ export default function BookingPage() {
     </div>
   );
 }
+

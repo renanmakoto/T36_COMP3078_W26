@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
+import { useSession } from '../../session-context';
 
 type BusyMap = Record<string, string[]>;
 
@@ -19,16 +20,25 @@ const initialBusy: BusyMap = (() => {
 export default function SchedulePage() {
   const search = useSearchParams();
   const router = useRouter();
-  const serviceId = search.get('service');
-  const title = search.get('title') ?? 'Service';
-  const price = Number(search.get('price') ?? 0);
-  const duration = Number(search.get('duration') ?? 0);
-  const addBrows = search.get('brows') === '1';
+  const { bookings, addBooking, rescheduleBooking } = useSession();
+  const bookingId = search.get('bookingId');
+
+  const existing = bookingId ? bookings.find((b) => b.id === bookingId) : undefined;
+
+  const serviceId = existing?.serviceId ?? search.get('service');
+  const title = existing?.serviceTitle ?? search.get('title') ?? 'Service';
+  const price = existing?.price ?? Number(search.get('price') ?? 0);
+  const duration = existing?.durationMinutes ?? Number(search.get('duration') ?? 0);
+  const addBrows = existing?.addBrows ?? (search.get('brows') === '1');
   const addOnDuration = addBrows ? 15 : 0;
   const addOnPrice = addBrows ? 5 : 0;
 
-  const [selectedDate, setSelectedDate] = useState<Date>(new Date());
-  const [selectedSlot, setSelectedSlot] = useState<string | null>(null);
+  const [selectedDate, setSelectedDate] = useState<Date>(() =>
+    existing ? new Date(existing.start) : new Date(),
+  );
+  const [selectedSlot, setSelectedSlot] = useState<string | null>(() =>
+    existing ? formatTimeLabel(new Date(existing.start)) : null,
+  );
   const [busy, setBusy] = useState<BusyMap>(initialBusy);
   const [message, setMessage] = useState('');
 
@@ -41,8 +51,9 @@ export default function SchedulePage() {
   const blocksNeeded = blocksToHold(duration, addOnDuration);
 
   function confirm() {
-    if (!selectedSlot) return;
+    if (!selectedSlot || !serviceId) return;
     const total = price + addOnPrice;
+
     setBusy((prev) => {
       const next = { ...prev };
       const list = new Set(next[dateKey] ?? []);
@@ -54,7 +65,25 @@ export default function SchedulePage() {
       next[dateKey] = Array.from(list);
       return next;
     });
-    setMessage(`Time reserved: ${formatDate(selectedDate)} at ${selectedSlot} (${title}) • Total $${total}`);
+
+    const start = combineDateAndTime(selectedDate, selectedSlot).toISOString();
+
+    if (bookingId && existing) {
+      rescheduleBooking(bookingId, start);
+      setMessage(
+        `Booking rescheduled to ${formatDate(selectedDate)} at ${selectedSlot} (${title}) · Total $${total}`,
+      );
+    } else {
+      addBooking({
+        serviceId,
+        serviceTitle: title,
+        start,
+        durationMinutes: duration + addOnDuration,
+        price: total,
+        addBrows,
+      });
+      setMessage(`Time reserved: ${formatDate(selectedDate)} at ${selectedSlot} (${title}) · Total $${total}`);
+    }
     setSelectedSlot(null);
   }
 
@@ -122,10 +151,10 @@ export default function SchedulePage() {
             </div>
           </div>
 
-          <div className="rounded-2xl border border-[#ecebf5] bg-[#fcfcff] p-4 space-y-3">
+          <div className="space-y-3 rounded-2xl border border-[#ecebf5] bg-[#fcfcff] p-4">
             <h3 className="text-lg font-semibold text-[#0f0a1e]">Summary</h3>
             <Row label="Service" value={title} />
-            {addBrows && <Row label="Add-on" value="Eyebrows +$5 • +15 min" />}
+            {addBrows && <Row label="Add-on" value="Eyebrows +$5 · +15 min" />}
             <Row label="Duration" value={`${duration + addOnDuration} min`} />
             <Row label="Price" value={`$${price + addOnPrice}`} />
             <Row label="Date" value={formatDate(selectedDate)} />
@@ -176,6 +205,15 @@ function formatTime(totalMinutes: number) {
   return `${displayHour}:${displayMin} ${period}`;
 }
 
+function formatTimeLabel(date: Date) {
+  const hours = date.getHours();
+  const minutes = date.getMinutes();
+  const period = hours >= 12 ? 'PM' : 'AM';
+  const displayHour = ((hours + 11) % 12) + 1;
+  const displayMin = minutes.toString().padStart(2, '0');
+  return `${displayHour}:${displayMin} ${period}`;
+}
+
 function formatDate(date: Date) {
   return new Intl.DateTimeFormat('en-US', { weekday: 'short', month: 'short', day: 'numeric' }).format(date);
 }
@@ -194,4 +232,17 @@ function blocksToHold(serviceDuration: number, addOnDuration: number) {
   const totalMinutes = serviceDuration + addOnDuration;
   const slots = Math.ceil(totalMinutes / 15);
   return Math.max(0, slots - 1);
+}
+
+function combineDateAndTime(date: Date, timeLabel: string) {
+  const [time, period] = timeLabel.split(' ');
+  const [hourStr, minuteStr] = time.split(':');
+  let hour = Number(hourStr);
+  const minute = Number(minuteStr);
+  const upperPeriod = period?.toUpperCase() === 'PM' ? 'PM' : 'AM';
+  if (upperPeriod === 'PM' && hour < 12) hour += 12;
+  if (upperPeriod === 'AM' && hour === 12) hour = 0;
+  const result = new Date(date);
+  result.setHours(hour, minute, 0, 0);
+  return result;
 }
