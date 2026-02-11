@@ -3,6 +3,7 @@ package com.example.uiprototypebeta
 import android.content.Intent
 import android.os.Bundle
 import android.widget.CheckBox
+import android.widget.Toast
 import androidx.appcompat.content.res.AppCompatResources
 import com.google.android.material.button.MaterialButton
 import com.google.android.material.card.MaterialCardView
@@ -15,14 +16,17 @@ class BookingActivity : BaseDrawerActivity() {
     private lateinit var cbBrows: CheckBox
     private lateinit var btnConfirm: MaterialButton
 
-    private val mainServices = listOf(
-        MainService("haircut", "Haircut", 20, 45),
-        MainService("beard", "Beard", 15, 30),
-        MainService("combo", "Haircut & Beard", 25, 60)
+    // Will be populated from the API
+    private data class ServiceInfo(
+        val apiId: String,   // UUID from backend
+        val name: String,
+        val priceCents: Int,
+        val durationMinutes: Int
     )
-    private val browAddOn = AddOn("brows", "Eyebrows", 5, 15)
 
-    private var selectedServiceId: String? = null
+    private var serviceMap = mutableMapOf<String, ServiceInfo>() // card key -> service info
+    private var eyebrowService: ServiceInfo? = null
+    private var selectedCardKey: String? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -54,48 +58,67 @@ class BookingActivity : BaseDrawerActivity() {
             card.setOnClickListener { selectService(cards, id) }
         }
 
+        // Fetch services from API and map to cards
+        loadServicesFromApi()
+
         btnConfirm.setOnClickListener {
-            val service = selectedServiceId?.let { id -> mainServices.find { it.id == id } }
-            if (service != null) {
-                val intent = Intent(this, BookingScheduleActivity::class.java).apply {
-                    putExtra("service_id", service.id)
-                    putExtra("service_title", service.title)
-                    putExtra("service_price", service.price)
-                    putExtra("service_duration", service.durationMinutes)
-                    putExtra("add_brows", cbBrows.isChecked)
-                    putExtra("add_brows_price", browAddOn.price)
-                    putExtra("add_brows_duration", browAddOn.durationMinutes)
-                }
-                startActivity(intent)
+            val cardKey = selectedCardKey ?: return@setOnClickListener
+            val service = serviceMap[cardKey] ?: return@setOnClickListener
+
+            val intent = Intent(this, BookingScheduleActivity::class.java).apply {
+                putExtra("service_id", service.apiId)
+                putExtra("service_title", service.name)
+                putExtra("service_price", service.priceCents)
+                putExtra("service_duration", service.durationMinutes)
+                putExtra("add_brows", cbBrows.isChecked)
+                putExtra("add_brows_price", eyebrowService?.priceCents ?: 0)
+                putExtra("add_brows_duration", eyebrowService?.durationMinutes ?: 0)
             }
+            startActivity(intent)
         }
 
         updateConfirmState()
     }
 
+    private fun loadServicesFromApi() {
+        ApiClient.getServices(
+            onSuccess = { array ->
+                for (i in 0 until array.length()) {
+                    val obj = array.getJSONObject(i)
+                    val id = obj.getString("id")
+                    val name = obj.getString("name")
+                    val price = obj.getInt("price_cents")
+                    val duration = obj.getInt("duration_minutes")
+                    val info = ServiceInfo(id, name, price, duration)
+
+                    // Map by name to the right card
+                    when {
+                        name.contains("Beard", ignoreCase = true) && name.contains("Haircut", ignoreCase = true) ->
+                            serviceMap["combo"] = info
+                        name.contains("Haircut", ignoreCase = true) ->
+                            serviceMap["haircut"] = info
+                        name.contains("Beard", ignoreCase = true) ->
+                            serviceMap["beard"] = info
+                        name.contains("Eyebrow", ignoreCase = true) || name.contains("Brow", ignoreCase = true) ->
+                            eyebrowService = info
+                    }
+                }
+            },
+            onError = { msg ->
+                runOnUiThread {
+                    Toast.makeText(this, "Failed to load services: $msg", Toast.LENGTH_SHORT).show()
+                }
+            }
+        )
+    }
+
     private fun selectService(cards: Map<String, MaterialCardView>, serviceId: String) {
         cards.forEach { (id, card) -> card.isChecked = (id == serviceId) }
-        selectedServiceId = serviceId
+        selectedCardKey = serviceId
         updateConfirmState()
     }
 
     private fun updateConfirmState() {
-        btnConfirm.isEnabled = selectedServiceId != null
+        btnConfirm.isEnabled = selectedCardKey != null
     }
-
-    data class MainService(
-        val id: String,
-        val title: String,
-        val price: Int,
-        val durationMinutes: Int
-    )
-
-    data class AddOn(
-        val id: String,
-        val title: String,
-        val price: Int,
-        val durationMinutes: Int
-    )
 }
-
-

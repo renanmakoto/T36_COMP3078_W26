@@ -8,30 +8,52 @@ import com.example.uiprototypebeta.databinding.ActivityLoginBinding
 
 class LoginActivity : AppCompatActivity() {
 
-    private val demoEmail = "user@example.com"
-    private val demoPassword = "password123"
-
     private lateinit var b: ActivityLoginBinding
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         b = ActivityLoginBinding.inflate(layoutInflater)
         setContentView(b.root)
 
+        // Pre-fill with seed user credentials
+        b.etEmail.setText("daniel@example.com")
+        b.etPassword.setText("Test1234!")
+
         b.btnSignIn.setOnClickListener {
             val email = b.etEmail.text?.toString()?.trim().orEmpty()
             val password = b.etPassword.text?.toString()?.trim().orEmpty()
 
-            val isValid = email.equals(demoEmail, ignoreCase = true) && password == demoPassword
+            b.btnSignIn.isEnabled = false
+            b.btnSignIn.text = "Signing in..."
 
-            if (isValid) {
-                UserSession.isLoggedIn = true
-                UserSession.displayName = email
-                Toast.makeText(this, "Signed in as $email", Toast.LENGTH_SHORT).show()
-                startActivity(Intent(this, UserDashboardActivity::class.java))
-                finish()
-            } else {
-                Toast.makeText(this, "Invalid email or password", Toast.LENGTH_LONG).show()
-            }
+            ApiClient.login(email, password,
+                onSuccess = { json ->
+                    val access = json.getString("access")
+                    val refresh = json.getString("refresh")
+                    val user = json.getJSONObject("user")
+                    val userEmail = user.getString("email")
+                    val userId = user.getString("id")
+
+                    ApiClient.accessToken = access
+                    ApiClient.refreshToken = refresh
+                    UserSession.isLoggedIn = true
+                    UserSession.displayName = userEmail.substringBefore("@")
+                    UserSession.userId = userId
+                    UserSession.userEmail = userEmail
+
+                    runOnUiThread {
+                        Toast.makeText(this, "Signed in as $userEmail", Toast.LENGTH_SHORT).show()
+                        startActivity(Intent(this, UserDashboardActivity::class.java))
+                        finish()
+                    }
+                },
+                onError = { msg ->
+                    runOnUiThread {
+                        b.btnSignIn.isEnabled = true
+                        b.btnSignIn.text = "Sign in"
+                        Toast.makeText(this, "Login failed: $msg", Toast.LENGTH_LONG).show()
+                    }
+                }
+            )
         }
 
         b.btnGuest.setOnClickListener {

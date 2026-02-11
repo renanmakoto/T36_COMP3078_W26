@@ -24,8 +24,7 @@ export default function Home() {
             Easy booking for Erick - plus portfolio and testimonials in one place.
           </h1>
           <p className="max-w-2xl text-lg text-[#49465a]">
-            Web version of the mobile prototype. Focused on self-service booking, valid slots, and a simple admin
-            area for the barber to manage schedule, content, and basic metrics.
+            Self-service booking with real-time availability. Pick your service, choose a time slot, and get instant confirmation.
           </p>
           <div className="flex flex-wrap gap-3">
             <Link
@@ -124,9 +123,7 @@ export default function Home() {
       <section className="grid gap-6 md:grid-cols-[1.1fr_0.9fr]">
         <div className="rounded-3xl bg-white p-6 shadow-sm md:p-8">
           <h2 className="text-2xl font-bold text-[#0f0a1e]">Testimonials</h2>
-          <p className="text-sm text-[#5a5872]">
-            Mocked on the front-end; consent capture will be handled in the backend.
-          </p>
+          <p className="text-sm text-[#5a5872]"></p>
           <div className="mt-5 space-y-4">
             {[
               {
@@ -153,7 +150,7 @@ export default function Home() {
 
         <div className="rounded-3xl bg-white p-6 shadow-sm md:p-8">
           <h2 className="text-2xl font-bold text-[#0f0a1e]">Blog & portfolio</h2>
-          <p className="text-sm text-[#5a5872]">Content preview; posts and photos are hardcoded.</p>
+          <p className="text-sm text-[#5a5872]"></p>
           <div className="mt-5 space-y-4">
             <div className="rounded-2xl border border-[#ecebf5] bg-[#fcfcff] p-4">
               <p className="text-xs uppercase tracking-wide text-[#7b7794]">Blog</p>
@@ -163,9 +160,7 @@ export default function Home() {
             <div className="rounded-2xl border border-[#ecebf5] bg-[#fcfcff] p-4">
               <p className="text-xs uppercase tracking-wide text-[#7b7794]">Portfolio</p>
               <p className="mt-1 font-semibold text-[#0f0a1e]">Before / After</p>
-              <p className="text-sm text-[#5a5872]">
-                Mock gallery - backend will handle uploads and consent.
-              </p>
+              <p className="text-sm text-[#5a5872]"></p>
             </div>
           </div>
         </div>

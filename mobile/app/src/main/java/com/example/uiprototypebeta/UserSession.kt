@@ -4,4 +4,15 @@ package com.example.uiprototypebeta
 object UserSession {
     var isLoggedIn: Boolean = false
     var displayName: String = ""
+    var userId: String = ""
+    var userEmail: String = ""
+
+    fun clear() {
+        isLoggedIn = false
+        displayName = ""
+        userId = ""
+        userEmail = ""
+        ApiClient.accessToken = null
+        ApiClient.refreshToken = null
+    }
 }

@@ -21,7 +21,6 @@ export default function PortfolioPage() {
       <div className="rounded-3xl bg-white p-6 shadow-sm">
         <div className="flex items-center justify-between">
           <h1 className="text-3xl font-bold text-[#0f0a1e]">Portfolio</h1>
-          <p className="text-sm text-[#5a5872]">Uploads and consent handling will be implemented in the backend.</p>
         </div>
 
         <div className="mt-5 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">

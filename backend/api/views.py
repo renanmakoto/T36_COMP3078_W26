@@ -107,20 +107,24 @@ class AvailabilityView(APIView):
     def get(self, request):
         target_date = _parse_date_param(request.query_params.get("date"))
 
+        # Optional: narrow available slots to those where a specific service fits.
+        duration_param = request.query_params.get("duration")
+        service_duration = int(duration_param) if duration_param else SLOT_MINUTES
+
         tz = timezone.get_current_timezone()
         day_start = datetime.combine(target_date, BUSINESS_START)
         day_end = datetime.combine(target_date, BUSINESS_END)
 
         slots = []
         current = day_start
-        while current + timedelta(minutes=SLOT_MINUTES) <= day_end:
+        while current + timedelta(minutes=service_duration) <= day_end:
             slots.append(current)
             current += timedelta(minutes=SLOT_MINUTES)
 
         slot_windows = [
             (
                 timezone.make_aware(slot, tz),
-                timezone.make_aware(slot + timedelta(minutes=SLOT_MINUTES), tz),
+                timezone.make_aware(slot + timedelta(minutes=service_duration), tz),
             )
             for slot in slots
         ]

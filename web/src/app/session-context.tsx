@@ -1,126 +1,83 @@
 'use client';
 
 import { createContext, useContext, useEffect, useMemo, useState } from 'react';
+import { apiLogin as apiLoginCall, clearTokens, setTokens, type LoginResult } from './api';
 
 type Role = 'guest' | 'user' | 'admin';
-type BookingStatus = 'scheduled' | 'cancelled' | 'completed';
-
-export type Booking = {
-  id: string;
-  serviceId: string;
-  serviceTitle: string;
-  start: string; // ISO datetime string
-  durationMinutes: number;
-  price: number;
-  addBrows: boolean;
-  userName: string;
-  status: BookingStatus;
-};
-
-type NewBookingInput = {
-  serviceId: string;
-  serviceTitle: string;
-  start: string;
-  durationMinutes: number;
-  price: number;
-  addBrows: boolean;
-};
 
 type SessionValue = {
   role: Role;
   displayName: string;
-  bookings: Booking[];
-  loginUser: (name: string) => void;
-  loginAdmin: () => void;
+  loginUser: (email: string, password: string) => Promise<string | null>;
+  loginAdmin: (email: string, password: string) => Promise<string | null>;
   logout: () => void;
-  addBooking: (data: NewBookingInput) => void;
-  cancelBooking: (id: string) => void;
-  rescheduleBooking: (id: string, newStart: string) => void;
-  setBookingStatus: (id: string, status: BookingStatus) => void;
 };
-
-const STORAGE_KEY = 'hb-bookings';
 
 const SessionContext = createContext<SessionValue | null>(null);
 
 export function SessionProvider({ children }: { children: React.ReactNode }) {
   const [role, setRole] = useState<Role>('guest');
   const [displayName, setDisplayName] = useState<string>('');
-  const [bookings, setBookings] = useState<Booking[]>([]);
 
-  // Load bookings from localStorage on mount
+  // Restore session from localStorage on mount
   useEffect(() => {
     if (typeof window === 'undefined') return;
-    try {
-      const raw = window.localStorage.getItem(STORAGE_KEY);
-      if (raw) {
-        const parsed = JSON.parse(raw) as Booking[];
-        if (Array.isArray(parsed)) {
-          setBookings(parsed);
-        }
-      }
-    } catch {
-      // ignore parse errors
+    const savedRole = localStorage.getItem('hb-role') as Role | null;
+    const savedName = localStorage.getItem('hb-name');
+    const token = localStorage.getItem('hb-access');
+    if (savedRole && token) {
+      setRole(savedRole);
+      setDisplayName(savedName || '');
     }
   }, []);
-
-  // Persist bookings whenever they change
-  useEffect(() => {
-    if (typeof window === 'undefined') return;
-    try {
-      window.localStorage.setItem(STORAGE_KEY, JSON.stringify(bookings));
-    } catch {
-      // ignore storage errors
-    }
-  }, [bookings]);
 
   const value = useMemo<SessionValue>(
     () => ({
       role,
       displayName,
-      bookings,
-      loginUser: (name: string) => {
-        setRole('user');
-        setDisplayName(name);
+
+      loginUser: async (email: string, password: string): Promise<string | null> => {
+        try {
+          const result: LoginResult = await apiLoginCall(email, password);
+          setTokens(result.access, result.refresh);
+          const name = result.user.email.split('@')[0];
+          setRole('user');
+          setDisplayName(name);
+          localStorage.setItem('hb-role', 'user');
+          localStorage.setItem('hb-name', name);
+          return null;
+        } catch (err: unknown) {
+          return err instanceof Error ? err.message : 'Login failed.';
+        }
       },
-      loginAdmin: () => {
-        setRole('admin');
-        setDisplayName('Admin');
+
+      loginAdmin: async (email: string, password: string): Promise<string | null> => {
+        try {
+          const result: LoginResult = await apiLoginCall(email, password);
+          if (result.user.role !== 'ADMIN') {
+            clearTokens();
+            return 'This account does not have admin privileges.';
+          }
+          setTokens(result.access, result.refresh);
+          setRole('admin');
+          setDisplayName('Admin');
+          localStorage.setItem('hb-role', 'admin');
+          localStorage.setItem('hb-name', 'Admin');
+          return null;
+        } catch (err: unknown) {
+          return err instanceof Error ? err.message : 'Login failed.';
+        }
       },
+
       logout: () => {
+        clearTokens();
+        localStorage.removeItem('hb-role');
+        localStorage.removeItem('hb-name');
         setRole('guest');
         setDisplayName('');
       },
-      addBooking: (data: NewBookingInput) => {
-        if (role !== 'user') {
-          // Only logged-in users can create saved bookings
-          return;
-        }
-        const booking: Booking = {
-          id: `${Date.now()}-${Math.random().toString(16).slice(2)}`,
-          userName: displayName || 'Client',
-           status: 'scheduled',
-          ...data,
-        };
-        setBookings((prev) => [...prev, booking]);
-      },
-      cancelBooking: (id: string) => {
-        setBookings((prev) =>
-          prev.map((b) => (b.id === id ? { ...b, status: 'cancelled' } : b)),
-        );
-      },
-      rescheduleBooking: (id: string, newStart: string) => {
-        setBookings((prev) =>
-          prev.map((b) => (b.id === id ? { ...b, start: newStart } : b)),
-        );
-      },
-      setBookingStatus: (id: string, status: BookingStatus) => {
-        setBookings((prev) =>
-          prev.map((b) => (b.id === id ? { ...b, status } : b)),
-        );
-      },
     }),
-    [role, displayName, bookings],
+    [role, displayName],
   );
 
   return <SessionContext.Provider value={value}>{children}</SessionContext.Provider>;

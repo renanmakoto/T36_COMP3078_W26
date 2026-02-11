@@ -4,10 +4,8 @@ import android.content.Intent
 import android.os.Bundle
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
-// Import statement for view binding - THIS WAS THE BROKEN LINE
 import com.example.uiprototypebeta.databinding.ActivityAdminLoginBinding
 
-// Class definition starts here, on a NEW LINE
 class AdminLoginActivity : AppCompatActivity() {
     private lateinit var binding: ActivityAdminLoginBinding
 
@@ -16,30 +14,55 @@ class AdminLoginActivity : AppCompatActivity() {
         binding = ActivityAdminLoginBinding.inflate(layoutInflater)
         setContentView(binding.root)
 
-        // This is for the back/close button
+        // Pre-fill with seed admin credentials
+        binding.etEmail.setText("admin@brazwebdes.com")
+        binding.etPassword.setText("Admin1234!")
+
         binding.toolbar.setNavigationOnClickListener { finish() }
 
-        // --- LOGIN BUTTON LOGIC ---
         binding.btnAdminLogin.setOnClickListener {
-            // Get text using the CORRECT IDs from your XML file
-            val username = binding.etEmail.text.toString()
-            val password = binding.etPassword.text.toString()
+            val email = binding.etEmail.text.toString().trim()
+            val password = binding.etPassword.text.toString().trim()
 
-            // Hardcoded check for "admin" and "123"
-            if (username == "admin" && password == "123") {
-                // If correct, show success and navigate
-                Toast.makeText(this, "Login Successful!", Toast.LENGTH_SHORT).show()
-                AdminSession.isLoggedIn = true
-                val intent = Intent(this, AdminDashboardActivity::class.java)
-                startActivity(intent)
-                finish()
-            } else {
-                // If wrong, show an error
-                Toast.makeText(this, "Invalid credentials", Toast.LENGTH_LONG).show()
-            }
+            binding.btnAdminLogin.isEnabled = false
+            binding.btnAdminLogin.text = "Signing in..."
+
+            ApiClient.login(email, password,
+                onSuccess = { json ->
+                    val access = json.getString("access")
+                    val refresh = json.getString("refresh")
+                    val user = json.getJSONObject("user")
+                    val role = user.getString("role")
+
+                    if (role != "ADMIN") {
+                        runOnUiThread {
+                            binding.btnAdminLogin.isEnabled = true
+                            binding.btnAdminLogin.text = "Sign in as Admin"
+                            Toast.makeText(this, "This account is not an admin", Toast.LENGTH_LONG).show()
+                        }
+                        return@login
+                    }
+
+                    ApiClient.accessToken = access
+                    ApiClient.refreshToken = refresh
+                    AdminSession.isLoggedIn = true
+
+                    runOnUiThread {
+                        Toast.makeText(this, "Admin login successful!", Toast.LENGTH_SHORT).show()
+                        startActivity(Intent(this, AdminDashboardActivity::class.java))
+                        finish()
+                    }
+                },
+                onError = { msg ->
+                    runOnUiThread {
+                        binding.btnAdminLogin.isEnabled = true
+                        binding.btnAdminLogin.text = "Sign in as Admin"
+                        Toast.makeText(this, "Login failed: $msg", Toast.LENGTH_LONG).show()
+                    }
+                }
+            )
         }
 
-        // This button logic is correct
         binding.btnSwitchToUser.setOnClickListener {
             startActivity(Intent(this, LoginActivity::class.java))
             finish()

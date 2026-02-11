@@ -11,11 +11,7 @@ export default function BlogPage() {
       <div className="rounded-3xl bg-white p-6 shadow-sm">
         <div className="flex items-center justify-between">
           <div>
-            <p className="text-sm text-[#7b7794]">Content</p>
             <h1 className="text-3xl font-bold text-[#0f0a1e]">Beauty Blog</h1>
-            <p className="text-sm text-[#5a5872]">
-              Posts are hardcoded; “New post” shows only for logged admin (UI only).
-            </p>
           </div>
           {role === 'admin' && (
             <Link

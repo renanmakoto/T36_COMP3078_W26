@@ -19,39 +19,28 @@ class BookingScheduleActivity : AppCompatActivity() {
     private var availableSlots: List<String> = emptyList()
 
     // When rescheduling, this will be set; otherwise null for new bookings
-    private var bookingId: String? = null
+    private var rescheduleId: String? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         b = ActivityBookingScheduleBinding.inflate(layoutInflater)
         setContentView(b.root)
 
-        bookingId = intent.getStringExtra("booking_id")
+        rescheduleId = intent.getStringExtra("reschedule_id")
 
-        val existingBooking = bookingId?.let { id ->
-            BookingStore.getAllBookings().find { it.id == id }
-        }
-
-        val serviceId = existingBooking?.serviceId ?: intent.getStringExtra("service_id") ?: return finish()
-        val serviceTitle = existingBooking?.serviceTitle ?: intent.getStringExtra("service_title").orEmpty()
-        val servicePrice = existingBooking?.price ?: intent.getIntExtra("service_price", 0)
-        val serviceDuration = existingBooking?.durationMinutes ?: intent.getIntExtra("service_duration", 0)
-        val addBrows = existingBooking?.addBrows ?: intent.getBooleanExtra("add_brows", false)
+        val serviceId = intent.getStringExtra("service_id") ?: return finish()
+        val serviceTitle = intent.getStringExtra("service_title").orEmpty()
+        val servicePrice = intent.getIntExtra("service_price", 0)
+        val serviceDuration = intent.getIntExtra("service_duration", 0)
+        val addBrows = intent.getBooleanExtra("add_brows", false)
         val addBrowsPrice = intent.getIntExtra("add_brows_price", 0)
-        val addBrowsDuration = intent.getIntExtra("add_brows_duration", 0)
 
         b.toolbar.setNavigationOnClickListener { finish() }
         b.tvServiceSummary.text = buildSummary(serviceTitle, servicePrice, addBrows, addBrowsPrice)
 
         val calStart = Calendar.getInstance()
-        if (existingBooking != null) {
-            calStart.timeInMillis = existingBooking.startMillis
-        }
         setSelectedDate(calStart)
-        loadSlotsForDate(selectedDateKey!!)
-        if (existingBooking != null) {
-            selectedSlot = SimpleDateFormat("h:mm a", Locale.getDefault()).format(calStart.time)
-        }
+        loadSlotsFromApi(selectedDateKey!!)
 
         b.calendarBooking.setOnDateChangeListener { _: CalendarView, year: Int, month: Int, dayOfMonth: Int ->
             val cal = Calendar.getInstance().apply {
@@ -64,49 +53,60 @@ class BookingScheduleActivity : AppCompatActivity() {
                 set(Calendar.MILLISECOND, 0)
             }
             setSelectedDate(cal)
-            loadSlotsForDate(selectedDateKey!!)
+            loadSlotsFromApi(selectedDateKey!!)
         }
 
         b.btnConfirmSlot.setOnClickListener {
             val slot = selectedSlot
             val date = selectedDateKey
-            if (slot != null && date != null) {
-                val totalPrice = servicePrice + if (addBrows) addBrowsPrice else 0
-                val summary = StringBuilder().apply {
-                    append(serviceTitle)
-                    if (addBrows) append(" + Brows")
-                    append("\nDate: ${b.tvSelectedDate.text}")
-                    append("\nTime: $slot")
-                    append("\nPrice: $$totalPrice")
-                }.toString()
-
-                Toast.makeText(this, "Saved!", Toast.LENGTH_SHORT).show()
-                // --- MOCK BOOKING DATA + SHARED BOOKING START ---
-                holdSlot(date, slot, serviceDuration, if (addBrows) addBrowsDuration else 0)
-
-                val startMillis = buildStartMillisFromDateAndTime(date, slot)
-                val name = if (UserSession.displayName.isNotBlank()) UserSession.displayName else "Guest"
-                if (UserSession.isLoggedIn) {
-                    val existingId = bookingId
-                    if (existingId != null) {
-                        BookingStore.rescheduleBooking(existingId, startMillis)
-                    } else {
-                        BookingStore.addBooking(
-                            userName = name,
-                            serviceId = serviceId,
-                            serviceTitle = serviceTitle,
-                            startMillis = startMillis,
-                            durationMinutes = serviceDuration + if (addBrows) addBrowsDuration else 0,
-                            price = totalPrice,
-                            addBrows = addBrows
-                        )
-                    }
-                }
-                // --- MOCK BOOKING DATA + SHARED BOOKING END ---
-
-                finish()
-            } else {
+            if (slot == null || date == null) {
                 Toast.makeText(this, "Select a date and time", Toast.LENGTH_SHORT).show()
+                return@setOnClickListener
+            }
+
+            if (!UserSession.isLoggedIn) {
+                Toast.makeText(this, "Please sign in to book", Toast.LENGTH_SHORT).show()
+                return@setOnClickListener
+            }
+
+            b.btnConfirmSlot.isEnabled = false
+            b.btnConfirmSlot.text = "Booking..."
+
+            val existingId = rescheduleId
+            if (existingId != null) {
+                // Reschedule via API
+                ApiClient.rescheduleAppointment(existingId, date, slot,
+                    onSuccess = {
+                        runOnUiThread {
+                            Toast.makeText(this, "Rescheduled!", Toast.LENGTH_SHORT).show()
+                            finish()
+                        }
+                    },
+                    onError = { msg ->
+                        runOnUiThread {
+                            b.btnConfirmSlot.isEnabled = true
+                            b.btnConfirmSlot.text = "Confirm time"
+                            Toast.makeText(this, "Failed: $msg", Toast.LENGTH_LONG).show()
+                        }
+                    }
+                )
+            } else {
+                // Create appointment via API
+                ApiClient.createAppointment(serviceId, date, slot,
+                    onSuccess = {
+                        runOnUiThread {
+                            Toast.makeText(this, "Appointment booked!", Toast.LENGTH_SHORT).show()
+                            finish()
+                        }
+                    },
+                    onError = { msg ->
+                        runOnUiThread {
+                            b.btnConfirmSlot.isEnabled = true
+                            b.btnConfirmSlot.text = "Confirm time"
+                            Toast.makeText(this, "Failed: $msg", Toast.LENGTH_LONG).show()
+                        }
+                    }
+                )
             }
         }
     }
@@ -116,62 +116,49 @@ class BookingScheduleActivity : AppCompatActivity() {
         b.tvSelectedDate.text = SimpleDateFormat("EEE, MMM d", Locale.getDefault()).format(cal.time)
     }
 
-    private fun loadSlotsForDate(dateKey: String) {
-        val dailyBusy = BookingMocks.busySlots[dateKey].orEmpty()
-        val slots = BookingMocks.generateSlots().filterNot { dailyBusy.contains(it) }
-        availableSlots = slots
+    private fun loadSlotsFromApi(dateKey: String) {
         selectedSlot = null
+        availableSlots = emptyList()
         renderSlots()
+
+        ApiClient.getAvailability(dateKey,
+            onSuccess = { json ->
+                val slotsArray = json.getJSONArray("slots")
+                val slots = mutableListOf<String>()
+                for (i in 0 until slotsArray.length()) {
+                    slots.add(slotsArray.getString(i))
+                }
+                availableSlots = slots
+                runOnUiThread { renderSlots() }
+            },
+            onError = { msg ->
+                runOnUiThread {
+                    Toast.makeText(this, "Failed to load slots: $msg", Toast.LENGTH_SHORT).show()
+                }
+            }
+        )
     }
 
     private fun renderSlots() {
         b.chipGroupSlots.removeAllViews()
         val selected = selectedSlot
-        val chips = mutableListOf<Chip>()
 
         availableSlots.forEach { time ->
             val chip = Chip(this).apply {
-                text = time
+                text = to12Hour(time)
                 isCheckable = true
                 isClickable = true
                 isChecked = (time == selected)
                 isEnabled = true
+                tag = time // Store 24h format in tag
                 setOnClickListener {
                     selectedSlot = time
                     renderSlots()
                 }
             }
             b.chipGroupSlots.addView(chip)
-            chips.add(chip)
-        }
-
-        if (selected != null) {
-            val selectedIndex = availableSlots.indexOf(selected)
-            if (selectedIndex >= 0) {
-                val blockCount = BookingMocks.blocksToHold(
-                    intent.getIntExtra("service_duration", 0),
-                    if (intent.getBooleanExtra("add_brows", false)) intent.getIntExtra("add_brows_duration", 0) else 0
-                )
-                val end = (selectedIndex + blockCount).coerceAtMost(availableSlots.lastIndex)
-                for (i in selectedIndex + 1..end) {
-                    val chip = chips[i]
-                    chip.isEnabled = false
-                    chip.alpha = 0.35f
-                }
-            }
         }
         b.btnConfirmSlot.isEnabled = selectedSlot != null
-    }
-
-    private fun holdSlot(dateKey: String, slot: String, serviceDuration: Int, addOnDuration: Int) {
-        val blockCount = BookingMocks.blocksToHold(serviceDuration, addOnDuration)
-        val idx = availableSlots.indexOf(slot)
-        val toBlock = mutableListOf(slot)
-        for (i in 1..blockCount) {
-            val next = availableSlots.getOrNull(idx + i)
-            if (next != null) toBlock.add(next)
-        }
-        BookingMocks.appendBusy(dateKey, toBlock)
     }
 
     private fun buildSummary(
@@ -181,10 +168,11 @@ class BookingScheduleActivity : AppCompatActivity() {
         addBrowsPrice: Int
     ): String {
         val total = servicePrice + if (addBrows) addBrowsPrice else 0
+        val priceStr = "$${total / 100}.${String.format("%02d", total % 100)}"
         return if (addBrows) {
-            "$serviceTitle + Brows · $$total"
+            "$serviceTitle + Brows · $priceStr"
         } else {
-            "$serviceTitle · $$total"
+            "$serviceTitle · $priceStr"
         }
     }
 
@@ -192,9 +180,13 @@ class BookingScheduleActivity : AppCompatActivity() {
         return SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(cal.time)
     }
 
-    private fun buildStartMillisFromDateAndTime(dateKey: String, slot: String): Long {
-        val format = SimpleDateFormat("yyyy-MM-dd h:mm a", Locale.getDefault())
-        val parsed = format.parse("$dateKey $slot")
-        return parsed?.time ?: System.currentTimeMillis()
+    private fun to12Hour(time24: String): String {
+        val parts = time24.split(":")
+        var h = parts[0].toInt()
+        val m = parts[1]
+        val period = if (h >= 12) "PM" else "AM"
+        if (h == 0) h = 12
+        else if (h > 12) h -= 12
+        return "$h:$m $period"
     }
 }
