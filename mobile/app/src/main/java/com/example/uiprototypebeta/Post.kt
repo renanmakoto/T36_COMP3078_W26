@@ -3,12 +3,13 @@ package com.example.uiprototypebeta
 import java.io.Serializable
 
 data class Post(
-    val id: Int,
+    val id: String,
+    val slug: String,
     val title: String,
-    val snippet: String,
+    val excerpt: String,
     val body: String,
+    val coverImageUrl: String,
     val tags: List<String>,
-    val date: String,
-    val author: String,
-    val readTime: String
+    val createdAt: String,
+    val authorName: String
 ) : Serializable

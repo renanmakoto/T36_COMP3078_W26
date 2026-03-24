@@ -1,30 +1,27 @@
 package com.example.uiprototypebeta
 
-import okhttp3.*
+import okhttp3.Call
+import okhttp3.Callback
 import okhttp3.MediaType.Companion.toMediaType
+import okhttp3.OkHttpClient
+import okhttp3.Request
+import okhttp3.Response
 import okhttp3.RequestBody.Companion.toRequestBody
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.IOException
+import java.net.URLEncoder
 
-/**
- * Singleton HTTP client that talks to the Django REST API.
- * Uses OkHttp with callback-based async calls so the main thread is never blocked.
- *
- * Default URL is defined via BuildConfig.API_BASE_URL in Gradle.
- * For Android emulator, 10.0.2.2 maps to host machine localhost.
- */
 object ApiClient {
 
     var baseUrl: String = BuildConfig.API_BASE_URL.trimEnd('/')
+    var webBaseUrl: String = BuildConfig.WEB_BASE_URL.trimEnd('/')
 
     private val client = OkHttpClient()
-    private val JSON_TYPE = "application/json; charset=utf-8".toMediaType()
+    private val jsonType = "application/json; charset=utf-8".toMediaType()
 
     var accessToken: String? = null
     var refreshToken: String? = null
-
-    // ---------- Auth ----------
 
     fun login(
         email: String,
@@ -40,19 +37,26 @@ object ApiClient {
     }
 
     fun register(
+        displayName: String,
         email: String,
         password: String,
         onSuccess: (JSONObject) -> Unit,
         onError: (String) -> Unit
     ) {
         val body = JSONObject().apply {
+            put("display_name", displayName)
             put("email", email)
             put("password", password)
         }
         post("/auth/register", body, authenticated = false, onSuccess = onSuccess, onError = onError)
     }
 
-    // ---------- Services ----------
+    fun getHomeContent(
+        onSuccess: (JSONObject) -> Unit,
+        onError: (String) -> Unit
+    ) {
+        get("/home-content", authenticated = false, onSuccess = onSuccess, onError = onError)
+    }
 
     fun getServices(
         onSuccess: (JSONArray) -> Unit,
@@ -61,17 +65,66 @@ object ApiClient {
         getArray("/services", authenticated = false, onSuccess = onSuccess, onError = onError)
     }
 
-    // ---------- Availability ----------
+    fun getPortfolioItems(
+        onSuccess: (JSONArray) -> Unit,
+        onError: (String) -> Unit
+    ) {
+        getArray("/portfolio", authenticated = false, onSuccess = onSuccess, onError = onError)
+    }
 
-    fun getAvailability(
-        date: String,
+    fun getBlogPosts(
+        onSuccess: (JSONArray) -> Unit,
+        onError: (String) -> Unit
+    ) {
+        getArray("/blog-posts", authenticated = false, onSuccess = onSuccess, onError = onError)
+    }
+
+    fun getBlogPost(
+        slug: String,
         onSuccess: (JSONObject) -> Unit,
         onError: (String) -> Unit
     ) {
-        get("/availability?date=$date", authenticated = false, onSuccess = onSuccess, onError = onError)
+        val encodedSlug = URLEncoder.encode(slug, Charsets.UTF_8.name())
+        get("/blog-posts/$encodedSlug", authenticated = false, onSuccess = onSuccess, onError = onError)
     }
 
-    // ---------- Appointments (user) ----------
+    fun getTestimonials(
+        onSuccess: (JSONArray) -> Unit,
+        onError: (String) -> Unit
+    ) {
+        getArray("/testimonials", authenticated = false, onSuccess = onSuccess, onError = onError)
+    }
+
+    fun createTestimonial(
+        authorName: String,
+        quote: String,
+        rating: Int,
+        serviceId: String?,
+        onSuccess: (JSONObject) -> Unit,
+        onError: (String) -> Unit
+    ) {
+        val body = JSONObject().apply {
+            put("author_name", authorName)
+            put("quote", quote)
+            put("rating", rating)
+            if (!serviceId.isNullOrBlank()) put("service_id", serviceId)
+        }
+        post("/testimonials", body, authenticated = true, onSuccess = onSuccess, onError = onError)
+    }
+
+    fun getAvailability(
+        date: String,
+        durationMinutes: Int = 0,
+        onSuccess: (JSONObject) -> Unit,
+        onError: (String) -> Unit
+    ) {
+        val query = if (durationMinutes > 0) {
+            "/availability?date=$date&duration=$durationMinutes"
+        } else {
+            "/availability?date=$date"
+        }
+        get(query, authenticated = false, onSuccess = onSuccess, onError = onError)
+    }
 
     fun getMyAppointments(
         onSuccess: (JSONArray) -> Unit,
@@ -82,8 +135,10 @@ object ApiClient {
 
     fun createAppointment(
         serviceId: String,
+        addOnIds: List<String>,
         date: String,
         startTime: String,
+        notes: String = "",
         onSuccess: (JSONObject) -> Unit,
         onError: (String) -> Unit
     ) {
@@ -91,6 +146,8 @@ object ApiClient {
             put("service_id", serviceId)
             put("date", date)
             put("start_time", startTime)
+            if (addOnIds.isNotEmpty()) put("add_on_ids", JSONArray(addOnIds))
+            if (notes.isNotBlank()) put("notes", notes)
         }
         post("/appointments", body, authenticated = true, onSuccess = onSuccess, onError = onError)
     }
@@ -118,8 +175,6 @@ object ApiClient {
         }
         patch("/appointments/$id", body, onSuccess = onSuccess, onError = onError)
     }
-
-    // ---------- Admin ----------
 
     fun getAdminAppointments(
         onSuccess: (JSONArray) -> Unit,
@@ -177,8 +232,6 @@ object ApiClient {
         get("/admin/analytics/no-show-rate", authenticated = true, onSuccess = onSuccess, onError = onError)
     }
 
-    // ---------- Internal helpers ----------
-
     private fun get(
         path: String,
         authenticated: Boolean,
@@ -210,7 +263,7 @@ object ApiClient {
     ) {
         val builder = Request.Builder()
             .url(url(path))
-            .post(body.toString().toRequestBody(JSON_TYPE))
+            .post(body.toString().toRequestBody(jsonType))
         if (authenticated) accessToken?.let { builder.addHeader("Authorization", "Bearer $it") }
         client.newCall(builder.build()).enqueue(jsonCallback(onSuccess, onError))
     }
@@ -223,7 +276,7 @@ object ApiClient {
     ) {
         val builder = Request.Builder()
             .url(url(path))
-            .patch(body.toString().toRequestBody(JSON_TYPE))
+            .patch(body.toString().toRequestBody(jsonType))
         accessToken?.let { builder.addHeader("Authorization", "Bearer $it") }
         client.newCall(builder.build()).enqueue(jsonCallback(onSuccess, onError))
     }
@@ -237,16 +290,17 @@ object ApiClient {
         override fun onFailure(call: Call, e: IOException) {
             onError(e.message ?: "Network error")
         }
+
         override fun onResponse(call: Call, response: Response) {
-            val bodyStr = response.body?.string() ?: ""
+            val bodyString = response.body?.string() ?: ""
             if (response.isSuccessful) {
-                try { onSuccess(JSONObject(bodyStr)) } catch (e: Exception) { onError("Parse error") }
-            } else {
                 try {
-                    val obj = JSONObject(bodyStr)
-                    val msg = obj.optString("detail", obj.toString())
-                    onError(msg)
-                } catch (_: Exception) { onError("Error ${response.code}") }
+                    onSuccess(JSONObject(bodyString))
+                } catch (_: Exception) {
+                    onError("Parse error")
+                }
+            } else {
+                onError(parseError(bodyString, response.code))
             }
         }
     }
@@ -258,13 +312,40 @@ object ApiClient {
         override fun onFailure(call: Call, e: IOException) {
             onError(e.message ?: "Network error")
         }
+
         override fun onResponse(call: Call, response: Response) {
-            val bodyStr = response.body?.string() ?: ""
+            val bodyString = response.body?.string() ?: ""
             if (response.isSuccessful) {
-                try { onSuccess(JSONArray(bodyStr)) } catch (e: Exception) { onError("Parse error") }
+                try {
+                    onSuccess(JSONArray(bodyString))
+                } catch (_: Exception) {
+                    onError("Parse error")
+                }
             } else {
-                onError("Error ${response.code}")
+                onError(parseError(bodyString, response.code))
             }
+        }
+    }
+
+    private fun parseError(bodyString: String, statusCode: Int): String {
+        return try {
+            val json = JSONObject(bodyString)
+            when {
+                json.optString("detail").isNotBlank() -> json.optString("detail")
+                json.optJSONArray("non_field_errors")?.optString(0).orEmpty().isNotBlank() ->
+                    json.optJSONArray("non_field_errors")!!.optString(0)
+                else -> {
+                    val firstKey = json.keys().asSequence().firstOrNull()
+                    val value = firstKey?.let { json.opt(it) }
+                    when (value) {
+                        is JSONArray -> value.optString(0, "Error $statusCode")
+                        is String -> value
+                        else -> "Error $statusCode"
+                    }
+                }
+            }
+        } catch (_: Exception) {
+            "Error $statusCode"
         }
     }
 }

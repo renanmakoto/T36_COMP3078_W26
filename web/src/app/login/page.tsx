@@ -22,15 +22,16 @@ export default function LoginPage() {
     if (err) {
       setError(err);
     } else {
-      router.push('/user/dashboard');
+      const nextRole = localStorage.getItem('hb-role');
+      router.push(nextRole === 'admin' ? '/admin/dashboard' : '/user/dashboard');
     }
   }
 
   return (
     <div className="mx-auto max-w-xl space-y-6 rounded-3xl bg-white p-8 shadow-sm">
-      <h1 className="text-3xl font-bold text-[#0f0a1e]">Sign in as client</h1>
+      <h1 className="text-3xl font-bold text-[#0f0a1e]">Sign in</h1>
       <p className="text-sm text-[#5a5872]">
-        Use the prefilled credentials or register a new account to explore.
+        Use one sign-in for both client and admin accounts. New registrations are always client accounts.
       </p>
 
       <form onSubmit={handleSubmit} className="space-y-4">

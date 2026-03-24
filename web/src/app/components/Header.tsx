@@ -60,7 +60,7 @@ export function Header() {
                 onClick={() => router.push(dashboardHref)}
                 className="rounded-full border border-[#e3e3e3] px-3 py-2 font-medium text-[#1a132f] hover:bg-[#f6f6f6]"
               >
-                {role === 'admin' ? 'Admin' : 'My bookings'}
+                {role === 'admin' ? 'Dashboard' : 'My bookings'}
               </button>
               <button
                 onClick={logout}
@@ -76,12 +76,6 @@ export function Header() {
                 className="rounded-full border border-[#e3e3e3] px-3 py-2 font-medium text-[#1a132f] hover:bg-[#f6f6f6]"
               >
                 Sign in
-              </button>
-              <button
-                onClick={() => router.push('/admin/login')}
-                className="rounded-full bg-[#1a132f] px-4 py-2 text-white shadow-sm hover:brightness-110"
-              >
-                Admin
               </button>
             </>
           )}

@@ -1,6 +1,7 @@
 package com.example.uiprototypebeta
 
 import android.graphics.Color
+import android.content.Intent
 import android.os.Bundle
 import android.util.TypedValue
 import android.view.View
@@ -24,6 +25,9 @@ class AdminDashboardActivity : BaseDrawerActivity() {
     private lateinit var btnList: Button
     private lateinit var btnCalendar: Button
     private lateinit var btnAnalytics: Button
+    private lateinit var btnManageBookings: Button
+    private lateinit var btnManageServices: Button
+    private lateinit var btnManageContent: Button
     private lateinit var listContainer: ScrollView
     private lateinit var calendarContainer: LinearLayout
     private lateinit var analyticsContainer: ScrollView
@@ -83,6 +87,9 @@ class AdminDashboardActivity : BaseDrawerActivity() {
         btnList = findViewById(R.id.btnList)
         btnCalendar = findViewById(R.id.btnCalendar)
         btnAnalytics = findViewById(R.id.btnAnalytics)
+        btnManageBookings = findViewById(R.id.btnManageBookings)
+        btnManageServices = findViewById(R.id.btnManageServices)
+        btnManageContent = findViewById(R.id.btnManageContent)
         listContainer = findViewById(R.id.listContainer)
         calendarContainer = findViewById(R.id.calendarContainer)
         analyticsContainer = findViewById(R.id.analyticsContainer)
@@ -125,6 +132,27 @@ class AdminDashboardActivity : BaseDrawerActivity() {
             setActiveButton(btnAnalytics, btnList, btnCalendar)
             renderAnalytics(appointments)
             loadAnalyticsFromApi()
+        }
+
+        btnManageBookings.setOnClickListener {
+            startActivity(Intent(this, WebAdminActivity::class.java).apply {
+                putExtra("title", "Bookings")
+                putExtra("path", "/admin/dashboard/bookings")
+            })
+        }
+
+        btnManageServices.setOnClickListener {
+            startActivity(Intent(this, WebAdminActivity::class.java).apply {
+                putExtra("title", "Services")
+                putExtra("path", "/admin/dashboard/services")
+            })
+        }
+
+        btnManageContent.setOnClickListener {
+            startActivity(Intent(this, WebAdminActivity::class.java).apply {
+                putExtra("title", "Content")
+                putExtra("path", "/admin/dashboard")
+            })
         }
 
         showListSection()

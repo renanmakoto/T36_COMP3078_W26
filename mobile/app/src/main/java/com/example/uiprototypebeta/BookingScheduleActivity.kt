@@ -12,19 +12,18 @@ import java.util.Locale
 
 class BookingScheduleActivity : AppCompatActivity() {
 
-    private lateinit var b: ActivityBookingScheduleBinding
+    private lateinit var binding: ActivityBookingScheduleBinding
 
     private var selectedDateKey: String? = null
     private var selectedSlot: String? = null
     private var availableSlots: List<String> = emptyList()
-
-    // When rescheduling, this will be set; otherwise null for new bookings
     private var rescheduleId: String? = null
+    private var addOnIds: List<String> = emptyList()
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        b = ActivityBookingScheduleBinding.inflate(layoutInflater)
-        setContentView(b.root)
+        binding = ActivityBookingScheduleBinding.inflate(layoutInflater)
+        setContentView(binding.root)
 
         rescheduleId = intent.getStringExtra("reschedule_id")
 
@@ -32,18 +31,18 @@ class BookingScheduleActivity : AppCompatActivity() {
         val serviceTitle = intent.getStringExtra("service_title").orEmpty()
         val servicePrice = intent.getIntExtra("service_price", 0)
         val serviceDuration = intent.getIntExtra("service_duration", 0)
-        val addBrows = intent.getBooleanExtra("add_brows", false)
-        val addBrowsPrice = intent.getIntExtra("add_brows_price", 0)
+        val addOnNames = intent.getStringArrayListExtra("add_on_names")?.toList().orEmpty()
+        addOnIds = intent.getStringArrayListExtra("add_on_ids")?.toList().orEmpty()
 
-        b.toolbar.setNavigationOnClickListener { finish() }
-        b.tvServiceSummary.text = buildSummary(serviceTitle, servicePrice, addBrows, addBrowsPrice)
+        binding.toolbar.setNavigationOnClickListener { finish() }
+        binding.tvServiceSummary.text = buildSummary(serviceTitle, servicePrice, serviceDuration, addOnNames)
 
-        val calStart = Calendar.getInstance()
-        setSelectedDate(calStart)
-        loadSlotsFromApi(selectedDateKey!!)
+        val startCalendar = Calendar.getInstance()
+        setSelectedDate(startCalendar)
+        loadSlotsFromApi(selectedDateKey!!, serviceDuration)
 
-        b.calendarBooking.setOnDateChangeListener { _: CalendarView, year: Int, month: Int, dayOfMonth: Int ->
-            val cal = Calendar.getInstance().apply {
+        binding.calendarBooking.setOnDateChangeListener { _: CalendarView, year: Int, month: Int, dayOfMonth: Int ->
+            val calendar = Calendar.getInstance().apply {
                 set(Calendar.YEAR, year)
                 set(Calendar.MONTH, month)
                 set(Calendar.DAY_OF_MONTH, dayOfMonth)
@@ -52,11 +51,11 @@ class BookingScheduleActivity : AppCompatActivity() {
                 set(Calendar.SECOND, 0)
                 set(Calendar.MILLISECOND, 0)
             }
-            setSelectedDate(cal)
-            loadSlotsFromApi(selectedDateKey!!)
+            setSelectedDate(calendar)
+            loadSlotsFromApi(selectedDateKey!!, serviceDuration)
         }
 
-        b.btnConfirmSlot.setOnClickListener {
+        binding.btnConfirmSlot.setOnClickListener {
             val slot = selectedSlot
             val date = selectedDateKey
             if (slot == null || date == null) {
@@ -69,41 +68,46 @@ class BookingScheduleActivity : AppCompatActivity() {
                 return@setOnClickListener
             }
 
-            b.btnConfirmSlot.isEnabled = false
-            b.btnConfirmSlot.text = "Booking..."
+            binding.btnConfirmSlot.isEnabled = false
+            binding.btnConfirmSlot.text = "Booking..."
 
             val existingId = rescheduleId
             if (existingId != null) {
-                // Reschedule via API
-                ApiClient.rescheduleAppointment(existingId, date, slot,
+                ApiClient.rescheduleAppointment(
+                    existingId,
+                    date,
+                    slot,
                     onSuccess = {
                         runOnUiThread {
                             Toast.makeText(this, "Rescheduled!", Toast.LENGTH_SHORT).show()
                             finish()
                         }
                     },
-                    onError = { msg ->
+                    onError = { message ->
                         runOnUiThread {
-                            b.btnConfirmSlot.isEnabled = true
-                            b.btnConfirmSlot.text = "Confirm time"
-                            Toast.makeText(this, "Failed: $msg", Toast.LENGTH_LONG).show()
+                            binding.btnConfirmSlot.isEnabled = true
+                            binding.btnConfirmSlot.text = "Confirm time"
+                            Toast.makeText(this, "Failed: $message", Toast.LENGTH_LONG).show()
                         }
                     }
                 )
             } else {
-                // Create appointment via API
-                ApiClient.createAppointment(serviceId, date, slot,
+                ApiClient.createAppointment(
+                    serviceId = serviceId,
+                    addOnIds = addOnIds,
+                    date = date,
+                    startTime = slot,
                     onSuccess = {
                         runOnUiThread {
                             Toast.makeText(this, "Appointment booked!", Toast.LENGTH_SHORT).show()
                             finish()
                         }
                     },
-                    onError = { msg ->
+                    onError = { message ->
                         runOnUiThread {
-                            b.btnConfirmSlot.isEnabled = true
-                            b.btnConfirmSlot.text = "Confirm time"
-                            Toast.makeText(this, "Failed: $msg", Toast.LENGTH_LONG).show()
+                            binding.btnConfirmSlot.isEnabled = true
+                            binding.btnConfirmSlot.text = "Confirm time"
+                            Toast.makeText(this, "Failed: $message", Toast.LENGTH_LONG).show()
                         }
                     }
                 )
@@ -111,82 +115,75 @@ class BookingScheduleActivity : AppCompatActivity() {
         }
     }
 
-    private fun setSelectedDate(cal: Calendar) {
-        selectedDateKey = dateKey(cal)
-        b.tvSelectedDate.text = SimpleDateFormat("EEE, MMM d", Locale.getDefault()).format(cal.time)
+    private fun setSelectedDate(calendar: Calendar) {
+        selectedDateKey = dateKey(calendar)
+        binding.tvSelectedDate.text = SimpleDateFormat("EEE, MMM d", Locale.getDefault()).format(calendar.time)
     }
 
-    private fun loadSlotsFromApi(dateKey: String) {
+    private fun loadSlotsFromApi(dateKey: String, durationMinutes: Int) {
         selectedSlot = null
         availableSlots = emptyList()
         renderSlots()
 
-        ApiClient.getAvailability(dateKey,
+        ApiClient.getAvailability(
+            date = dateKey,
+            durationMinutes = durationMinutes,
             onSuccess = { json ->
                 val slotsArray = json.getJSONArray("slots")
                 val slots = mutableListOf<String>()
-                for (i in 0 until slotsArray.length()) {
-                    slots.add(slotsArray.getString(i))
+                for (index in 0 until slotsArray.length()) {
+                    slots.add(slotsArray.getString(index))
                 }
                 availableSlots = slots
                 runOnUiThread { renderSlots() }
             },
-            onError = { msg ->
+            onError = { message ->
                 runOnUiThread {
-                    Toast.makeText(this, "Failed to load slots: $msg", Toast.LENGTH_SHORT).show()
+                    Toast.makeText(this, "Failed to load slots: $message", Toast.LENGTH_SHORT).show()
                 }
             }
         )
     }
 
     private fun renderSlots() {
-        b.chipGroupSlots.removeAllViews()
-        val selected = selectedSlot
-
+        binding.chipGroupSlots.removeAllViews()
         availableSlots.forEach { time ->
             val chip = Chip(this).apply {
                 text = to12Hour(time)
                 isCheckable = true
                 isClickable = true
-                isChecked = (time == selected)
-                isEnabled = true
-                tag = time // Store 24h format in tag
+                isChecked = time == selectedSlot
+                tag = time
                 setOnClickListener {
                     selectedSlot = time
                     renderSlots()
                 }
             }
-            b.chipGroupSlots.addView(chip)
+            binding.chipGroupSlots.addView(chip)
         }
-        b.btnConfirmSlot.isEnabled = selectedSlot != null
+        binding.btnConfirmSlot.isEnabled = selectedSlot != null
     }
 
     private fun buildSummary(
         serviceTitle: String,
         servicePrice: Int,
-        addBrows: Boolean,
-        addBrowsPrice: Int
+        serviceDuration: Int,
+        addOnNames: List<String>
     ): String {
-        val total = servicePrice + if (addBrows) addBrowsPrice else 0
-        val priceStr = "$${total / 100}.${String.format("%02d", total % 100)}"
-        return if (addBrows) {
-            "$serviceTitle + Brows · $priceStr"
-        } else {
-            "$serviceTitle · $priceStr"
-        }
+        val addOnLabel = if (addOnNames.isEmpty()) "No add-ons" else addOnNames.joinToString(", ")
+        return "$serviceTitle\n${formatMoney(servicePrice)}  ${serviceDuration} min\n$addOnLabel"
     }
 
-    private fun dateKey(cal: Calendar): String {
-        return SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(cal.time)
+    private fun dateKey(calendar: Calendar): String {
+        return SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(calendar.time)
     }
 
     private fun to12Hour(time24: String): String {
         val parts = time24.split(":")
-        var h = parts[0].toInt()
-        val m = parts[1]
-        val period = if (h >= 12) "PM" else "AM"
-        if (h == 0) h = 12
-        else if (h > 12) h -= 12
-        return "$h:$m $period"
+        var hour = parts[0].toInt()
+        val minute = parts[1]
+        val period = if (hour >= 12) "PM" else "AM"
+        if (hour == 0) hour = 12 else if (hour > 12) hour -= 12
+        return "$hour:$minute $period"
     }
 }

@@ -25,7 +25,7 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginTop="16dp"
-            android:text="We just need a few details to get you started."
+            android:text="We just need a few details to get you started. Admin accounts are added manually."
             android:textColor="@color/brand_muted"
             android:textSize="14sp" />
 

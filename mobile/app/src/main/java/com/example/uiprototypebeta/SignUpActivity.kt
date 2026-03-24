@@ -14,11 +14,12 @@ class SignUpActivity : AppCompatActivity() {
         setContentView(binding.root)
 
         binding.btnCreateAccount.setOnClickListener {
+            val displayName = binding.etName.text?.toString()?.trim().orEmpty()
             val email = binding.etEmail.text?.toString()?.trim().orEmpty()
             val password = binding.etPassword.text?.toString()?.trim().orEmpty()
 
-            if (email.isEmpty() || password.isEmpty()) {
-                Toast.makeText(this, "Please fill in email and password", Toast.LENGTH_SHORT).show()
+            if (displayName.isEmpty() || email.isEmpty() || password.isEmpty()) {
+                Toast.makeText(this, "Please fill in name, email, and password", Toast.LENGTH_SHORT).show()
                 return@setOnClickListener
             }
             if (password.length < 8) {
@@ -29,7 +30,7 @@ class SignUpActivity : AppCompatActivity() {
             binding.btnCreateAccount.isEnabled = false
             binding.btnCreateAccount.text = "Creating..."
 
-            ApiClient.register(email, password,
+            ApiClient.register(displayName, email, password,
                 onSuccess = {
                     runOnUiThread {
                         Toast.makeText(this, "Account created! Please sign in.", Toast.LENGTH_SHORT).show()
