@@ -3,8 +3,8 @@
     xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:orientation="vertical"
-    android:background="@color/surface_soft">
+    android:background="@color/surface_soft"
+    android:orientation="vertical">
 
     <ScrollView
         android:layout_width="match_parent"
@@ -18,21 +18,61 @@
             android:orientation="vertical"
             android:padding="16dp">
 
-            <LinearLayout
+            <com.google.android.material.card.MaterialCardView
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginBottom="20dp"
-                android:orientation="vertical">
+                android:layout_marginBottom="16dp"
+                app:cardBackgroundColor="@android:color/white"
+                app:cardCornerRadius="24dp"
+                app:cardElevation="0dp">
 
-                <TextView
-                    android:layout_width="wrap_content"
+                <LinearLayout
+                    android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:text="Hairstylist Booking"
-                    android:textColor="@color/brand_text"
-                    android:textSize="22sp"
-                    android:textStyle="bold" />
+                    android:orientation="vertical"
+                    android:padding="20dp">
 
-            </LinearLayout>
+                    <TextView
+                        android:id="@+id/tvHeroEyebrow"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:background="@drawable/bg_chip"
+                        android:paddingHorizontal="12dp"
+                        android:paddingVertical="6dp"
+                        android:text="Live content"
+                        android:textColor="@color/brand_text"
+                        android:textSize="12sp"
+                        android:textStyle="bold" />
+
+                    <TextView
+                        android:id="@+id/tvHeroTitle"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="12dp"
+                        android:text="Erik can manage services, portfolio, blog, and reviews from the admin CMS."
+                        android:textColor="@color/brand_text"
+                        android:textSize="24sp"
+                        android:textStyle="bold" />
+
+                    <TextView
+                        android:id="@+id/tvHeroBody"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="8dp"
+                        android:text="Customers now see real services, add-ons, portfolio work, blog posts, and approved testimonials."
+                        android:textColor="@color/brand_muted"
+                        android:textSize="14sp" />
+
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/btnAdminCms"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="12dp"
+                        android:text="Open admin CMS"
+                        android:textAllCaps="false"
+                        android:visibility="gone" />
+                </LinearLayout>
+            </com.google.android.material.card.MaterialCardView>
 
             <LinearLayout
                 android:layout_width="match_parent"
@@ -58,16 +98,17 @@
                         <TextView
                             android:layout_width="wrap_content"
                             android:layout_height="wrap_content"
-                            android:text="Next openings"
+                            android:text="Services"
                             android:textColor="@color/brand_muted"
                             android:textSize="12sp" />
 
                         <TextView
+                            android:id="@+id/tvMetricServices"
                             android:layout_width="wrap_content"
                             android:layout_height="wrap_content"
-                            android:text="Today"
+                            android:text="0"
                             android:textColor="@color/brand_text"
-                            android:textSize="16sp"
+                            android:textSize="18sp"
                             android:textStyle="bold" />
                     </LinearLayout>
                 </com.google.android.material.card.MaterialCardView>
@@ -75,7 +116,7 @@
                 <com.google.android.material.card.MaterialCardView
                     android:layout_width="0dp"
                     android:layout_height="wrap_content"
-                    android:layout_marginHorizontal="8dp"
+                    android:layout_marginHorizontal="4dp"
                     android:layout_weight="1"
                     app:cardBackgroundColor="@android:color/white"
                     app:cardCornerRadius="16dp"
@@ -90,16 +131,17 @@
                         <TextView
                             android:layout_width="wrap_content"
                             android:layout_height="wrap_content"
-                            android:text="Clients"
+                            android:text="Portfolio"
                             android:textColor="@color/brand_muted"
                             android:textSize="12sp" />
 
                         <TextView
+                            android:id="@+id/tvMetricPortfolio"
                             android:layout_width="wrap_content"
                             android:layout_height="wrap_content"
-                            android:text="+35 weekly"
+                            android:text="0"
                             android:textColor="@color/brand_text"
-                            android:textSize="16sp"
+                            android:textSize="18sp"
                             android:textStyle="bold" />
                     </LinearLayout>
                 </com.google.android.material.card.MaterialCardView>
@@ -122,16 +164,17 @@
                         <TextView
                             android:layout_width="wrap_content"
                             android:layout_height="wrap_content"
-                            android:text="Response time"
+                            android:text="Reviews"
                             android:textColor="@color/brand_muted"
                             android:textSize="12sp" />
 
                         <TextView
+                            android:id="@+id/tvMetricReviews"
                             android:layout_width="wrap_content"
                             android:layout_height="wrap_content"
-                            android:text="&lt;10 min"
+                            android:text="0"
                             android:textColor="@color/brand_text"
-                            android:textSize="16sp"
+                            android:textSize="18sp"
                             android:textStyle="bold" />
                     </LinearLayout>
                 </com.google.android.material.card.MaterialCardView>
@@ -140,292 +183,74 @@
             <TextView
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="28dp"
-                android:text="Our Services"
-                android:textStyle="bold"
+                android:layout_marginTop="24dp"
+                android:text="Featured services"
+                android:textColor="@color/brand_text"
                 android:textSize="18sp"
-                android:textColor="@color/brand_text" />
+                android:textStyle="bold" />
 
-            <com.google.android.material.card.MaterialCardView
+            <LinearLayout
+                android:id="@+id/llFeaturedServices"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="16dp"
-                app:cardBackgroundColor="@android:color/white"
-                app:cardCornerRadius="18dp"
-                app:cardElevation="0dp"
-                app:strokeColor="@color/card_stroke"
-                app:strokeWidth="0.6dp">
+                android:layout_marginTop="12dp"
+                android:animateLayoutChanges="true"
+                android:orientation="vertical" />
 
-                <LinearLayout
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:gravity="center_vertical"
-                    android:minHeight="88dp"
-                    android:orientation="horizontal"
-                    android:padding="16dp">
-
-                    <ImageView
-                        android:layout_width="40dp"
-                        android:layout_height="40dp"
-                        android:background="@drawable/service_icon_background"
-                        android:padding="8dp"
-                        android:src="@android:drawable/ic_menu_crop"
-                        android:tint="@color/nav_selected_bg" />
-
-                    <LinearLayout
-                        android:layout_width="0dp"
-                        android:layout_height="wrap_content"
-                        android:layout_marginStart="12dp"
-                        android:layout_weight="1"
-                        android:orientation="vertical">
-
-                        <TextView
-                            android:layout_width="wrap_content"
-                            android:layout_height="wrap_content"
-                            android:text="Haircut"
-                            android:textColor="@color/brand_text"
-                            android:textStyle="bold"
-                            android:textSize="18sp" />
-
-                        <TextView
-                            android:layout_width="wrap_content"
-                            android:layout_height="wrap_content"
-                            android:layout_marginTop="2dp"
-                            android:text="Professional haircuts for all hair types"
-                            android:textColor="@color/brand_muted"
-                            android:textSize="14sp" />
-
-                        <TextView
-                            android:layout_width="wrap_content"
-                            android:layout_height="wrap_content"
-                            android:layout_marginTop="8dp"
-                            android:background="@drawable/bg_chip"
-                            android:paddingHorizontal="10dp"
-                            android:paddingVertical="4dp"
-                            android:text="30–45 min"
-                            android:textSize="12sp" />
-                    </LinearLayout>
-
-                    <TextView
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:text="$20"
-                        android:textColor="@color/brand_text"
-                        android:textStyle="bold"
-                        android:textSize="18sp" />
-                </LinearLayout>
-            </com.google.android.material.card.MaterialCardView>
-
-            <com.google.android.material.card.MaterialCardView
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="16dp"
-                app:cardBackgroundColor="@android:color/white"
-                app:cardCornerRadius="18dp"
-                app:cardElevation="0dp"
-                app:strokeColor="@color/card_stroke"
-                app:strokeWidth="0.6dp">
-
-                <LinearLayout
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:gravity="center_vertical"
-                    android:minHeight="88dp"
-                    android:orientation="horizontal"
-                    android:padding="16dp">
-
-                    <ImageView
-                        android:layout_width="40dp"
-                        android:layout_height="40dp"
-                        android:background="@drawable/service_icon_background"
-                        android:padding="8dp"
-                        android:src="@android:drawable/ic_menu_crop"
-                        android:tint="@color/nav_selected_bg" />
-
-                    <LinearLayout
-                        android:layout_width="0dp"
-                        android:layout_height="wrap_content"
-                        android:layout_marginStart="12dp"
-                        android:layout_weight="1"
-                        android:orientation="vertical">
-
-                        <TextView
-                            android:layout_width="wrap_content"
-                            android:layout_height="wrap_content"
-                            android:text="Haircut &amp; Beard"
-                            android:textColor="@color/brand_text"
-                            android:textStyle="bold"
-                            android:textSize="18sp" />
-
-                        <TextView
-                            android:layout_width="wrap_content"
-                            android:layout_height="wrap_content"
-                            android:layout_marginTop="2dp"
-                            android:text="Complete haircut and beard trim service"
-                            android:textColor="@color/brand_muted"
-                            android:textSize="14sp" />
-
-                        <TextView
-                            android:layout_width="wrap_content"
-                            android:layout_height="wrap_content"
-                            android:layout_marginTop="8dp"
-                            android:background="@drawable/bg_chip"
-                            android:paddingHorizontal="10dp"
-                            android:paddingVertical="4dp"
-                            android:text="45–60 min"
-                            android:textSize="12sp" />
-                    </LinearLayout>
-
-                    <TextView
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:text="$25"
-                        android:textColor="@color/brand_text"
-                        android:textStyle="bold"
-                        android:textSize="18sp" />
-                </LinearLayout>
-            </com.google.android.material.card.MaterialCardView>
-
-            <com.google.android.material.card.MaterialCardView
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="16dp"
-                app:cardBackgroundColor="@android:color/white"
-                app:cardCornerRadius="18dp"
-                app:cardElevation="0dp"
-                app:strokeColor="@color/card_stroke"
-                app:strokeWidth="0.6dp">
-
-                <LinearLayout
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:gravity="center_vertical"
-                    android:minHeight="88dp"
-                    android:orientation="horizontal"
-                    android:padding="16dp">
-
-                    <ImageView
-                        android:layout_width="40dp"
-                        android:layout_height="40dp"
-                        android:background="@drawable/service_icon_background"
-                        android:padding="8dp"
-                        android:src="@android:drawable/ic_menu_crop"
-                        android:tint="@color/nav_selected_bg" />
-
-                    <LinearLayout
-                        android:layout_width="0dp"
-                        android:layout_height="wrap_content"
-                        android:layout_marginStart="12dp"
-                        android:layout_weight="1"
-                        android:orientation="vertical">
-
-                        <TextView
-                            android:layout_width="wrap_content"
-                            android:layout_height="wrap_content"
-                            android:text="Eyebrows"
-                            android:textColor="@color/brand_text"
-                            android:textStyle="bold"
-                            android:textSize="18sp" />
-
-                        <TextView
-                            android:layout_width="wrap_content"
-                            android:layout_height="wrap_content"
-                            android:layout_marginTop="2dp"
-                            android:text="Professional eyebrow shaping and trimming"
-                            android:textColor="@color/brand_muted"
-                            android:textSize="14sp" />
-
-                        <TextView
-                            android:layout_width="wrap_content"
-                            android:layout_height="wrap_content"
-                            android:layout_marginTop="8dp"
-                            android:background="@drawable/bg_chip"
-                            android:paddingHorizontal="10dp"
-                            android:paddingVertical="4dp"
-                            android:text="15–20 min"
-                            android:textSize="12sp" />
-                    </LinearLayout>
-
-                    <TextView
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:text="$5"
-                        android:textColor="@color/brand_text"
-                        android:textStyle="bold"
-                        android:textSize="18sp" />
-                </LinearLayout>
-            </com.google.android.material.card.MaterialCardView>
-
-            <com.google.android.material.card.MaterialCardView
-                android:layout_width="match_parent"
+            <TextView
+                android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="24dp"
-                app:cardBackgroundColor="@android:color/white"
-                app:cardCornerRadius="20dp"
-                app:cardElevation="0dp">
+                android:text="Portfolio highlights"
+                android:textColor="@color/brand_text"
+                android:textSize="18sp"
+                android:textStyle="bold" />
 
-                <LinearLayout
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:orientation="vertical"
-                    android:padding="20dp">
+            <LinearLayout
+                android:id="@+id/llFeaturedPortfolio"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="12dp"
+                android:animateLayoutChanges="true"
+                android:orientation="vertical" />
 
-                    <TextView
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:text="Contact &amp; Hours"
-                        android:textColor="@color/brand_text"
-                        android:textStyle="bold"
-                        android:textSize="16sp" />
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="24dp"
+                android:text="Blog picks"
+                android:textColor="@color/brand_text"
+                android:textSize="18sp"
+                android:textStyle="bold" />
 
-                    <TextView
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:layout_marginTop="6dp"
-                        android:text="📍 230 Woolner Avenue"
-                        android:textColor="@color/brand_text"
-                        android:textSize="14sp" />
+            <LinearLayout
+                android:id="@+id/llFeaturedBlog"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="12dp"
+                android:animateLayoutChanges="true"
+                android:orientation="vertical" />
 
-                    <TextView
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:text="✉ erickhenriquecanada2909@gmail.com"
-                        android:textColor="@color/brand_text"
-                        android:textSize="14sp" />
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="24dp"
+                android:text="Client testimonials"
+                android:textColor="@color/brand_text"
+                android:textSize="18sp"
+                android:textStyle="bold" />
 
-                    <LinearLayout
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:layout_marginTop="10dp"
-                        android:orientation="vertical">
-
-                        <TextView
-                            android:layout_width="wrap_content"
-                            android:layout_height="wrap_content"
-                            android:text="Mon–Fri · 7:00 PM – 10:30 PM"
-                            android:textColor="@color/brand_muted"
-                            android:textSize="13sp" />
-
-                        <TextView
-                            android:layout_width="wrap_content"
-                            android:layout_height="wrap_content"
-                            android:text="Saturday · 8:00 AM – 5:00 PM"
-                            android:textColor="@color/brand_muted"
-                            android:textSize="13sp" />
-
-                        <TextView
-                            android:layout_width="wrap_content"
-                            android:layout_height="wrap_content"
-                            android:text="Sunday · 8:00 AM – 12:00 PM"
-                            android:textColor="@color/brand_muted"
-                            android:textSize="13sp" />
-                    </LinearLayout>
-                </LinearLayout>
-            </com.google.android.material.card.MaterialCardView>
+            <LinearLayout
+                android:id="@+id/llFeaturedTestimonials"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="12dp"
+                android:animateLayoutChanges="true"
+                android:orientation="vertical" />
 
             <View
                 android:layout_width="match_parent"
-                android:layout_height="80dp" />
+                android:layout_height="24dp" />
         </LinearLayout>
     </ScrollView>
 
@@ -435,7 +260,7 @@
         android:layout_height="56dp"
         android:layout_margin="12dp"
         android:background="@drawable/bg_bottom_cta"
-        android:text="Book Now"
+        android:text="Book now"
         android:textAllCaps="false"
         android:textColor="@color/white"
         android:textSize="16sp" />

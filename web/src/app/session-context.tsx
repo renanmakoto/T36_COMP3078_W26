@@ -40,10 +40,11 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
         try {
           const result: LoginResult = await apiLoginCall(email, password);
           setTokens(result.access, result.refresh);
-          const name = result.user.email.split('@')[0];
-          setRole('user');
+          const name = result.user.display_name || result.user.email.split('@')[0];
+          const nextRole: Role = result.user.role === 'ADMIN' ? 'admin' : 'user';
+          setRole(nextRole);
           setDisplayName(name);
-          localStorage.setItem('hb-role', 'user');
+          localStorage.setItem('hb-role', nextRole);
           localStorage.setItem('hb-name', name);
           return null;
         } catch (err: unknown) {
@@ -60,9 +61,10 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
           }
           setTokens(result.access, result.refresh);
           setRole('admin');
-          setDisplayName('Admin');
+          const name = result.user.display_name || 'Admin';
+          setDisplayName(name);
           localStorage.setItem('hb-role', 'admin');
-          localStorage.setItem('hb-name', 'Admin');
+          localStorage.setItem('hb-name', name);
           return null;
         } catch (err: unknown) {
           return err instanceof Error ? err.message : 'Login failed.';

@@ -2,8 +2,18 @@ from django.urls import path
 from rest_framework_simplejwt.views import TokenRefreshView
 
 from .views import (
-    AdminAppointmentListView,
+    AdminAddOnDetailView,
+    AdminAddOnListCreateView,
+    AdminAppointmentListCreateView,
     AdminAppointmentUpdateView,
+    AdminBlogPostDetailView,
+    AdminBlogPostListCreateView,
+    AdminPortfolioItemDetailView,
+    AdminPortfolioItemListCreateView,
+    AdminServiceDetailView,
+    AdminServiceListCreateView,
+    AdminTestimonialDetailView,
+    AdminTestimonialListCreateView,
     AnalyticsBookingsPerDayView,
     AnalyticsBookingsPerMonthView,
     AnalyticsNoShowRateView,
@@ -11,22 +21,29 @@ from .views import (
     AppointmentListCreateView,
     AppointmentUpdateView,
     AvailabilityView,
+    BlogPostDetailView,
+    BlogPostListView,
+    HomeContentView,
     LoginView,
+    PortfolioItemListView,
     RegisterView,
     ServiceListView,
+    TestimonialListCreateView,
 )
 
 urlpatterns = [
-    # Auth
     path("auth/register", RegisterView.as_view(), name="auth-register"),
     path("auth/login", LoginView.as_view(), name="auth-login"),
     path("auth/token/refresh", TokenRefreshView.as_view(), name="token-refresh"),
 
-    # Public
+    path("home-content", HomeContentView.as_view(), name="home-content"),
     path("services", ServiceListView.as_view(), name="services-list"),
+    path("portfolio", PortfolioItemListView.as_view(), name="portfolio-list"),
+    path("blog-posts", BlogPostListView.as_view(), name="blog-post-list"),
+    path("blog-posts/<slug:slug>", BlogPostDetailView.as_view(), name="blog-post-detail"),
+    path("testimonials", TestimonialListCreateView.as_view(), name="testimonials"),
     path("availability", AvailabilityView.as_view(), name="availability"),
 
-    # User-facing appointments
     path("appointments", AppointmentListCreateView.as_view(), name="appointments"),
     path(
         "appointments/<uuid:appointment_id>",
@@ -34,10 +51,51 @@ urlpatterns = [
         name="appointment-update",
     ),
 
-    # Admin appointments
+    path("admin/services", AdminServiceListCreateView.as_view(), name="admin-services"),
+    path(
+        "admin/services/<uuid:pk>",
+        AdminServiceDetailView.as_view(),
+        name="admin-service-detail",
+    ),
+    path("admin/add-ons", AdminAddOnListCreateView.as_view(), name="admin-add-ons"),
+    path(
+        "admin/add-ons/<uuid:pk>",
+        AdminAddOnDetailView.as_view(),
+        name="admin-add-on-detail",
+    ),
+    path(
+        "admin/portfolio-items",
+        AdminPortfolioItemListCreateView.as_view(),
+        name="admin-portfolio-items",
+    ),
+    path(
+        "admin/portfolio-items/<uuid:pk>",
+        AdminPortfolioItemDetailView.as_view(),
+        name="admin-portfolio-item-detail",
+    ),
+    path(
+        "admin/blog-posts",
+        AdminBlogPostListCreateView.as_view(),
+        name="admin-blog-posts",
+    ),
+    path(
+        "admin/blog-posts/<uuid:pk>",
+        AdminBlogPostDetailView.as_view(),
+        name="admin-blog-post-detail",
+    ),
+    path(
+        "admin/testimonials",
+        AdminTestimonialListCreateView.as_view(),
+        name="admin-testimonials",
+    ),
+    path(
+        "admin/testimonials/<uuid:pk>",
+        AdminTestimonialDetailView.as_view(),
+        name="admin-testimonial-detail",
+    ),
     path(
         "admin/appointments",
-        AdminAppointmentListView.as_view(),
+        AdminAppointmentListCreateView.as_view(),
         name="admin-appointments",
     ),
     path(
@@ -46,7 +104,6 @@ urlpatterns = [
         name="admin-appointment-update",
     ),
 
-    # Analytics (admin only)
     path(
         "admin/analytics/bookings-per-day",
         AnalyticsBookingsPerDayView.as_view(),

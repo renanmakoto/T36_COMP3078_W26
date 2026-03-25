@@ -123,8 +123,8 @@ open class BaseDrawerActivity : AppCompatActivity() {
                 startActivity(Intent(this, AdminDashboardActivity::class.java))
             }
         } else {
-            if (this !is AdminLoginActivity) {
-                startActivity(Intent(this, AdminLoginActivity::class.java))
+            if (this !is LoginActivity) {
+                startActivity(Intent(this, LoginActivity::class.java))
             }
         }
         drawerLayout.closeDrawer(GravityCompat.END)

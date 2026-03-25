@@ -32,19 +32,31 @@ class LoginActivity : AppCompatActivity() {
                     val user = json.getJSONObject("user")
                     val userEmail = user.getString("email")
                     val userId = user.getString("id")
-
-                    // Clear other role session first; clear() resets API tokens.
-                    AdminSession.clear()
-                    ApiClient.accessToken = access
-                    ApiClient.refreshToken = refresh
-                    UserSession.isLoggedIn = true
-                    UserSession.displayName = userEmail.substringBefore("@")
-                    UserSession.userId = userId
-                    UserSession.userEmail = userEmail
+                    val role = user.getString("role")
+                    val displayName = user.optString("display_name").ifBlank { userEmail.substringBefore("@") }
 
                     runOnUiThread {
-                        Toast.makeText(this, "Signed in as $userEmail", Toast.LENGTH_SHORT).show()
-                        startActivity(Intent(this, UserDashboardActivity::class.java))
+                        ApiClient.accessToken = access
+                        ApiClient.refreshToken = refresh
+
+                        if (role == "ADMIN") {
+                            UserSession.clear()
+                            ApiClient.accessToken = access
+                            ApiClient.refreshToken = refresh
+                            AdminSession.isLoggedIn = true
+                            Toast.makeText(this, "Signed in as admin", Toast.LENGTH_SHORT).show()
+                            startActivity(Intent(this, AdminDashboardActivity::class.java))
+                        } else {
+                            AdminSession.clear()
+                            ApiClient.accessToken = access
+                            ApiClient.refreshToken = refresh
+                            UserSession.isLoggedIn = true
+                            UserSession.displayName = displayName
+                            UserSession.userId = userId
+                            UserSession.userEmail = userEmail
+                            Toast.makeText(this, "Signed in as $userEmail", Toast.LENGTH_SHORT).show()
+                            startActivity(Intent(this, UserDashboardActivity::class.java))
+                        }
                         finish()
                     }
                 },
