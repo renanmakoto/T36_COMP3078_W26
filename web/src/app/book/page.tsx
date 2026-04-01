@@ -3,9 +3,11 @@
 import { useMemo, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { apiGetServices, type AddOnData, type ServiceData } from '../api';
+import { useSession } from '../session-context';
 
 export default function BookingPage() {
   const router = useRouter();
+  const { isReady, role } = useSession();
   const [services, setServices] = useState<ServiceData[]>([]);
   const [selectedServiceId, setSelectedServiceId] = useState<string | null>(null);
   const [selectedAddOnIds, setSelectedAddOnIds] = useState<string[]>([]);
@@ -92,25 +94,25 @@ export default function BookingPage() {
                     setSelectedServiceId(service.id);
                     setSelectedAddOnIds([]);
                   }}
-                  className={`overflow-hidden rounded-3xl border text-left transition ${
+                  className={`booking-service-card overflow-hidden rounded-3xl border text-left transition ${
                     active
                       ? 'border-[#1a132f] shadow-[0_16px_40px_-26px_rgba(26,19,47,0.45)]'
                       : 'border-[#e5e4ef] hover:border-[#c8c6e2]'
                   }`}
                 >
                   <div
-                    className="h-44 bg-cover bg-center"
+                    className="booking-service-media"
                     style={{
                       backgroundImage: service.image_url
                         ? `linear-gradient(180deg, rgba(15,10,30,0.08), rgba(15,10,30,0.5)), url(${service.image_url})`
                         : 'linear-gradient(135deg, #eadff8, #f7f4ff)',
                     }}
                   />
-                  <div className="space-y-3 bg-[#fcfcff] p-5">
+                  <div className="booking-service-body bg-[#fcfcff] p-5">
                     <div className="flex items-start justify-between gap-3">
-                      <div>
-                        <p className="text-xl font-semibold text-[#0f0a1e]">{service.name}</p>
-                        <p className="text-sm text-[#5a5872]">{service.description}</p>
+                      <div className="min-w-0">
+                        <p className="booking-service-title text-xl font-semibold text-[#0f0a1e]">{service.name}</p>
+                        <p className="booking-service-copy text-sm text-[#5a5872]">{service.description}</p>
                       </div>
                       <span className="rounded-full bg-[#f1eefc] px-3 py-1 text-xs font-semibold text-[#1a132f]">
                         {service.duration_minutes} min
@@ -130,7 +132,7 @@ export default function BookingPage() {
 
           <div className="space-y-5 rounded-[2rem] border border-[#ecebf5] bg-[#fcfcff] p-5">
             <div
-              className="h-52 rounded-[1.5rem] bg-cover bg-center"
+              className="booking-detail-media rounded-[1.5rem]"
               style={{
                 backgroundImage: selectedService.image_url
                   ? `linear-gradient(180deg, rgba(15,10,30,0.08), rgba(15,10,30,0.5)), url(${selectedService.image_url})`
@@ -218,6 +220,11 @@ export default function BookingPage() {
               >
                 Continue to schedule
               </button>
+              {isReady && role === 'guest' ? (
+                <p className="mt-3 text-xs text-[#ddd9ef]">
+                  You can review the calendar first. Sign-in is only required when you confirm the appointment.
+                </p>
+              ) : null}
             </div>
           </div>
         </div>

@@ -2,9 +2,12 @@ import uuid
 
 from django.contrib.auth.base_user import AbstractBaseUser, BaseUserManager
 from django.contrib.auth.models import PermissionsMixin
+from django.contrib.postgres.constraints import ExclusionConstraint
+from django.contrib.postgres.fields import RangeOperators
 from django.core.exceptions import ValidationError
 from django.core.validators import MaxValueValidator, MinValueValidator
 from django.db import models
+from django.db.models import F, Func, Q, Value
 from django.utils.text import slugify
 
 
@@ -249,6 +252,23 @@ class Appointment(models.Model):
             models.Index(fields=["start_time"]),
             models.Index(fields=["status"]),
         ]
+        constraints = [
+            ExclusionConstraint(
+                name="prevent_overlapping_active_appointments",
+                expressions=[
+                    (
+                        Func(
+                            F("start_time"),
+                            F("end_time"),
+                            Value("[)"),
+                            function="TSTZRANGE",
+                        ),
+                        RangeOperators.OVERLAPS,
+                    )
+                ],
+                condition=~Q(status=AppointmentStatus.CANCELLED),
+            )
+        ]
         ordering = ["-start_time"]
 
     def clean(self):
@@ -257,3 +277,67 @@ class Appointment(models.Model):
 
     def __str__(self) -> str:
         return f"{self.user.email} - {self.service.name} @ {self.start_time}"
+
+
+class AppointmentNotificationEvent(models.TextChoices):
+    CREATED = "BOOKING_CREATED", "Booking Created"
+    RESCHEDULED = "BOOKING_RESCHEDULED", "Booking Rescheduled"
+    CANCELLED = "BOOKING_CANCELLED", "Booking Cancelled"
+    NO_SHOW = "BOOKING_NO_SHOW", "Booking No Show"
+
+
+class AppointmentNotificationRecipient(models.TextChoices):
+    CLIENT = "CLIENT", "Client"
+    OWNER = "OWNER", "Owner"
+
+
+class AppointmentNotificationStatus(models.TextChoices):
+    PENDING = "PENDING", "Pending"
+    SENT = "SENT", "Sent"
+    DELIVERED = "DELIVERED", "Delivered"
+    BOUNCED = "BOUNCED", "Bounced"
+    COMPLAINED = "COMPLAINED", "Complained"
+    FAILED = "FAILED", "Failed"
+
+
+class AppointmentEmailNotification(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    appointment = models.ForeignKey(
+        Appointment,
+        related_name="email_notifications",
+        on_delete=models.CASCADE,
+    )
+    event_type = models.CharField(max_length=32, choices=AppointmentNotificationEvent.choices)
+    recipient_type = models.CharField(
+        max_length=16,
+        choices=AppointmentNotificationRecipient.choices,
+    )
+    recipient_email = models.EmailField()
+    subject = models.CharField(max_length=255)
+    provider = models.CharField(max_length=32, default="RESEND")
+    provider_message_id = models.CharField(max_length=255, blank=True, null=True, unique=True)
+    idempotency_key = models.CharField(max_length=255, unique=True)
+    status = models.CharField(
+        max_length=16,
+        choices=AppointmentNotificationStatus.choices,
+        default=AppointmentNotificationStatus.PENDING,
+    )
+    payload = models.JSONField(default=dict, blank=True)
+    last_event_payload = models.JSONField(default=dict, blank=True)
+    error_message = models.TextField(blank=True)
+    sent_at = models.DateTimeField(blank=True, null=True)
+    delivered_at = models.DateTimeField(blank=True, null=True)
+    last_event_at = models.DateTimeField(blank=True, null=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        indexes = [
+            models.Index(fields=["appointment", "event_type"]),
+            models.Index(fields=["status"]),
+            models.Index(fields=["recipient_email"]),
+        ]
+        ordering = ["-created_at"]
+
+    def __str__(self) -> str:
+        return f"{self.event_type} -> {self.recipient_email} ({self.status})"

@@ -22,6 +22,8 @@ export default function PortfolioPage() {
   const [authorName, setAuthorName] = useState(displayName);
   const [rating, setRating] = useState(5);
   const [serviceId, setServiceId] = useState('');
+  const [testimonialFilterServiceId, setTestimonialFilterServiceId] = useState('');
+  const [showAllTestimonials, setShowAllTestimonials] = useState(false);
   const [submitState, setSubmitState] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
   const [submitMessage, setSubmitMessage] = useState('');
 
@@ -40,6 +42,13 @@ export default function PortfolioPage() {
   useEffect(() => {
     setAuthorName(displayName);
   }, [displayName]);
+
+  const filteredTestimonials = testimonials.filter((testimonial) => {
+    if (!testimonialFilterServiceId) return true;
+    return testimonial.service?.id === testimonialFilterServiceId;
+  });
+
+  const visibleTestimonials = showAllTestimonials ? filteredTestimonials : filteredTestimonials.slice(0, 4);
 
   async function handleSubmit(event: FormEvent) {
     event.preventDefault();
@@ -74,7 +83,7 @@ export default function PortfolioPage() {
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
             <h1 className="text-3xl font-bold text-[#0f0a1e]">Portfolio</h1>
-            <p className="text-sm text-[#5a5872]">Real work published by the admin, no more hard-coded gallery cards.</p>
+            <p className="text-sm text-[#5a5872]">Recent cuts, beard work, and client-approved results from the studio.</p>
           </div>
         </div>
 
@@ -114,14 +123,31 @@ export default function PortfolioPage() {
 
       <div className="grid gap-6 lg:grid-cols-[1fr_0.95fr]">
         <div className="rounded-[2rem] bg-white p-6 shadow-sm md:p-8">
-          <div className="flex items-center justify-between gap-3">
+          <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
               <h2 className="text-2xl font-bold text-[#0f0a1e]">Approved testimonials</h2>
-              <p className="text-sm text-[#5a5872]">Admins can approve, reject, edit, and feature these reviews.</p>
+              <p className="text-sm text-[#5a5872]">Filter by service and expand the list only when needed.</p>
             </div>
-            <span className="rounded-full bg-[#f1eefc] px-3 py-1 text-xs font-semibold text-[#1a132f]">
-              {testimonials.length} published
-            </span>
+            <div className="flex items-center gap-3">
+              <select
+                value={testimonialFilterServiceId}
+                onChange={(event) => {
+                  setTestimonialFilterServiceId(event.target.value);
+                  setShowAllTestimonials(false);
+                }}
+                className="rounded-full border border-[#e5e4ef] bg-white px-4 py-2 text-xs font-semibold text-[#1a132f] outline-none"
+              >
+                <option value="">All services</option>
+                {services.map((service) => (
+                  <option key={service.id} value={service.id}>
+                    {service.name}
+                  </option>
+                ))}
+              </select>
+              <span className="rounded-full bg-[#f1eefc] px-3 py-1 text-xs font-semibold text-[#1a132f]">
+                {filteredTestimonials.length} published
+              </span>
+            </div>
           </div>
 
           <div className="mt-5 space-y-4">
@@ -129,9 +155,18 @@ export default function PortfolioPage() {
               ? Array.from({ length: 3 }, (_, index) => (
                   <div key={`testimonial-skeleton-${index}`} className="h-[180px] animate-pulse rounded-3xl bg-[#f6f4ff]" />
                 ))
-              : testimonials.map((testimonial) => (
+              : visibleTestimonials.map((testimonial) => (
                   <div key={testimonial.id} className="rounded-3xl border border-[#ecebf5] bg-[#fcfcff] p-5">
-                    <p className="text-xs uppercase tracking-[0.24em] text-[#7b7794]">Rating {testimonial.rating}/5</p>
+                    <div className="flex items-center gap-1 text-[#f5a524]">
+                      {Array.from({ length: testimonial.rating }, (_, index) => (
+                        <span key={`${testimonial.id}-star-${index}`} aria-hidden="true">
+                          &#9733;
+                        </span>
+                      ))}
+                      <span className="ml-2 text-xs font-semibold uppercase tracking-[0.18em] text-[#7b7794]">
+                        {testimonial.rating}/5
+                      </span>
+                    </div>
                     <p className="mt-3 text-sm leading-6 text-[#1a132f]">&quot;{testimonial.quote}&quot;</p>
                     <div className="mt-4 flex items-center justify-between gap-4">
                       <div>
@@ -146,6 +181,16 @@ export default function PortfolioPage() {
                     </div>
                   </div>
                 ))}
+
+            {!loading && filteredTestimonials.length > 4 ? (
+              <button
+                type="button"
+                onClick={() => setShowAllTestimonials((current) => !current)}
+                className="rounded-full border border-[#1a132f] px-4 py-2 text-sm font-semibold text-[#1a132f] hover:bg-[#f6f6f6]"
+              >
+                {showAllTestimonials ? 'Show less' : 'View more'}
+              </button>
+            ) : null}
           </div>
         </div>
 
@@ -213,7 +258,7 @@ export default function PortfolioPage() {
             <button
               type="submit"
               disabled={submitState === 'loading'}
-              className="w-full rounded-xl bg-[#1a132f] px-4 py-3 text-sm font-semibold text-white shadow-sm transition hover:brightness-110 disabled:opacity-60"
+              className="w-full rounded-xl bg-[#1a132f] px-4 py-3 text-sm font-semibold !text-white shadow-sm transition hover:brightness-110 disabled:opacity-60"
             >
               {submitState === 'loading' ? 'Submitting...' : 'Submit testimonial'}
             </button>

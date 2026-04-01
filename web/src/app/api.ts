@@ -1,4 +1,4 @@
-const API = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+const API = process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:8000';
 
 function getAccessToken(): string | null {
   if (typeof window === 'undefined') return null;
@@ -33,10 +33,11 @@ async function parseError(res: Response, fallback: string): Promise<string> {
 }
 
 async function rawFetch(path: string, token: string | null, options: RequestInit = {}): Promise<Response> {
-  const headers: Record<string, string> = {
-    'Content-Type': 'application/json',
-    ...((options.headers as Record<string, string>) || {}),
-  };
+  const isFormData = typeof FormData !== 'undefined' && options.body instanceof FormData;
+  const headers: Record<string, string> = { ...((options.headers as Record<string, string>) || {}) };
+  if (!isFormData && !headers['Content-Type'] && !headers['content-type']) {
+    headers['Content-Type'] = 'application/json';
+  }
   if (token) headers.Authorization = `Bearer ${token}`;
   return fetch(`${API}${path}`, { ...options, headers });
 }
@@ -163,6 +164,18 @@ export type HomeContentData = {
   featured_portfolio: PortfolioItemData[];
   featured_blog_posts: BlogPostSummaryData[];
   featured_testimonials: TestimonialData[];
+};
+
+export type AdminAnalyticsOverviewData = {
+  total_bookings: number;
+  upcoming_bookings: number;
+  today_bookings: number;
+  scheduled_revenue_cents: number;
+  completed_revenue_cents: number;
+  this_month_revenue_cents: number;
+  unique_clients: number;
+  returning_clients: number;
+  new_clients_this_month: number;
 };
 
 export type AdminServiceData = ServiceData & {
@@ -326,6 +339,37 @@ export async function apiRescheduleAppointment(id: string, date: string, startTi
   return res.json();
 }
 
+export async function apiResolveBookingLink(token: string): Promise<{ action: string; appointment: AppointmentData }> {
+  const params = new URLSearchParams({ token });
+  const res = await fetch(`${API}/booking-links/resolve?${params}`);
+  if (!res.ok) throw new Error(await parseError(res, 'Failed to open booking link.'));
+  return res.json();
+}
+
+export async function apiCancelBookingLink(token: string): Promise<{ result: string; appointment: AppointmentData }> {
+  const res = await fetch(`${API}/booking-links/cancel`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ token }),
+  });
+  if (!res.ok) throw new Error(await parseError(res, 'Failed to cancel appointment.'));
+  return res.json();
+}
+
+export async function apiRescheduleBookingLink(
+  token: string,
+  date: string,
+  startTime: string,
+): Promise<{ result: string; appointment: AppointmentData }> {
+  const res = await fetch(`${API}/booking-links/reschedule`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ token, date, start_time: startTime }),
+  });
+  if (!res.ok) throw new Error(await parseError(res, 'Failed to reschedule appointment.'));
+  return res.json();
+}
+
 export async function apiGetAllAppointments(filters?: { status?: string; date?: string }): Promise<AdminAppointmentData[]> {
   const params = new URLSearchParams();
   if (filters?.status) params.set('status', filters.status);
@@ -377,6 +421,21 @@ export async function apiAdminChangeStatus(id: string, status: string): Promise<
 export async function apiGetAdminServices(): Promise<AdminServiceData[]> {
   const res = await authFetch('/admin/services');
   if (!res.ok) throw new Error('Failed to load services.');
+  return res.json();
+}
+
+export async function apiUploadAdminImage(
+  file: File,
+  kind: 'service' | 'portfolio' | 'blog' | 'misc',
+): Promise<{ url: string; path: string; name: string; size: number; content_type: string }> {
+  const formData = new FormData();
+  formData.append('file', file);
+  formData.append('kind', kind);
+  const res = await authFetch('/admin/uploads/image', {
+    method: 'POST',
+    body: formData,
+  });
+  if (!res.ok) throw new Error(await parseError(res, 'Failed to upload image.'));
   return res.json();
 }
 
@@ -503,6 +562,12 @@ export async function apiUpdateAdminTestimonial(
 export async function apiBookingsPerDay(month: string): Promise<{ date: string; count: number }[]> {
   const res = await authFetch(`/admin/analytics/bookings-per-day?month=${month}`);
   if (!res.ok) throw new Error('Failed to load analytics.');
+  return res.json();
+}
+
+export async function apiAnalyticsOverview(): Promise<AdminAnalyticsOverviewData> {
+  const res = await authFetch('/admin/analytics/overview');
+  if (!res.ok) throw new Error('Failed to load analytics overview.');
   return res.json();
 }
 

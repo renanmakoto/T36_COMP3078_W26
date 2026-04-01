@@ -3,8 +3,8 @@ package com.example.uiprototypebeta
 import android.content.Intent
 import android.graphics.Typeface
 import android.os.Bundle
-import android.view.View
 import android.widget.CheckBox
+import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.TextView
 import android.widget.Toast
@@ -12,7 +12,6 @@ import androidx.core.content.ContextCompat
 import coil.load
 import com.google.android.material.button.MaterialButton
 import com.google.android.material.card.MaterialCardView
-import android.widget.ImageView
 
 class BookingActivity : BaseDrawerActivity() {
 
@@ -20,7 +19,6 @@ class BookingActivity : BaseDrawerActivity() {
     private lateinit var addOnsContainer: LinearLayout
     private lateinit var summaryText: TextView
     private lateinit var confirmButton: MaterialButton
-    private lateinit var manageServicesButton: MaterialButton
 
     private var services: List<ServiceOption> = emptyList()
     private var selectedServiceId: String? = null
@@ -36,15 +34,6 @@ class BookingActivity : BaseDrawerActivity() {
         addOnsContainer = findViewById(R.id.llAddOns)
         summaryText = findViewById(R.id.tvSummary)
         confirmButton = findViewById(R.id.btnConfirm)
-        manageServicesButton = findViewById(R.id.btnManageServices)
-
-        manageServicesButton.visibility = if (AdminSession.isLoggedIn) View.VISIBLE else View.GONE
-        manageServicesButton.setOnClickListener {
-            startActivity(Intent(this, WebAdminActivity::class.java).apply {
-                putExtra("title", "Services")
-                putExtra("path", "/admin/dashboard/services")
-            })
-        }
 
         confirmButton.setOnClickListener {
             val service = selectedService() ?: return@setOnClickListener
@@ -52,7 +41,8 @@ class BookingActivity : BaseDrawerActivity() {
             startActivity(Intent(this, BookingScheduleActivity::class.java).apply {
                 putExtra("service_id", service.id)
                 putExtra("service_title", service.name)
-                putExtra("service_price", totalPrice(service))
+                putExtra("service_base_price", service.priceCents)
+                putExtra("service_total_price", totalPrice(service))
                 putExtra("service_duration", totalDuration(service))
                 putStringArrayListExtra("add_on_ids", ArrayList(selectedAddOns.map { it.id }))
                 putStringArrayListExtra("add_on_names", ArrayList(selectedAddOns.map { it.name }))
@@ -60,11 +50,6 @@ class BookingActivity : BaseDrawerActivity() {
         }
 
         loadServices()
-    }
-
-    override fun onResume() {
-        super.onResume()
-        manageServicesButton.visibility = if (AdminSession.isLoggedIn) View.VISIBLE else View.GONE
     }
 
     private fun loadServices() {
@@ -97,15 +82,13 @@ class BookingActivity : BaseDrawerActivity() {
         }
 
         services.forEach { service ->
+            val isSelected = service.id == selectedServiceId
             val card = MaterialCardView(this).apply {
-                radius = dp(18).toFloat()
-                isCheckable = true
-                isClickable = true
-                isChecked = service.id == selectedServiceId
+                radius = dp(24).toFloat()
                 strokeWidth = dp(1)
                 strokeColor = ContextCompat.getColor(
                     context,
-                    if (isChecked) R.color.nav_selected_bg else R.color.card_stroke
+                    if (isSelected) R.color.nav_selected_bg else R.color.card_stroke
                 )
                 setCardBackgroundColor(ContextCompat.getColor(context, android.R.color.white))
                 cardElevation = 0f
@@ -122,12 +105,12 @@ class BookingActivity : BaseDrawerActivity() {
                 }
             }
 
-            val row = LinearLayout(this).apply {
-                orientation = LinearLayout.HORIZONTAL
-                setPadding(dp(16), dp(16), dp(16), dp(16))
-            }
+            val wrapper = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
             val image = ImageView(this).apply {
-                layoutParams = LinearLayout.LayoutParams(dp(72), dp(72))
+                layoutParams = LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.MATCH_PARENT,
+                    dp(176)
+                )
                 scaleType = ImageView.ScaleType.CENTER_CROP
                 setBackgroundColor(ContextCompat.getColor(context, R.color.card_stroke))
                 if (service.imageUrl.isNotBlank()) {
@@ -136,40 +119,60 @@ class BookingActivity : BaseDrawerActivity() {
             }
             val body = LinearLayout(this).apply {
                 orientation = LinearLayout.VERTICAL
-                layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f).apply {
-                    marginStart = dp(12)
-                }
+                setPadding(dp(18), dp(18), dp(18), dp(18))
             }
-            body.addView(TextView(this).apply {
-                text = service.name
-                setTextColor(ContextCompat.getColor(context, R.color.brand_text))
-                setTextSize(android.util.TypedValue.COMPLEX_UNIT_SP, 16f)
-                setTypeface(typeface, Typeface.BOLD)
+
+            val topRow = LinearLayout(this).apply {
+                orientation = LinearLayout.HORIZONTAL
+            }
+            topRow.addView(LinearLayout(this).apply {
+                orientation = LinearLayout.VERTICAL
+                layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
+                addView(TextView(this@BookingActivity).apply {
+                    text = service.name
+                    setTextColor(ContextCompat.getColor(context, R.color.brand_text))
+                    setTextSize(android.util.TypedValue.COMPLEX_UNIT_SP, 19f)
+                    setTypeface(typeface, Typeface.BOLD)
+                })
+                addView(TextView(this@BookingActivity).apply {
+                    text = service.description.ifBlank { "Service details available at booking." }
+                    setTextColor(ContextCompat.getColor(context, R.color.brand_muted))
+                    setTextSize(android.util.TypedValue.COMPLEX_UNIT_SP, 14f)
+                    setPadding(0, dp(6), 0, 0)
+                })
             })
-            body.addView(TextView(this).apply {
-                text = service.description
-                setTextColor(ContextCompat.getColor(context, R.color.brand_muted))
-                setTextSize(android.util.TypedValue.COMPLEX_UNIT_SP, 13f)
-                setPadding(0, dp(4), 0, 0)
-            })
-            body.addView(TextView(this).apply {
+            topRow.addView(TextView(this).apply {
                 text = "${service.durationMinutes} min"
                 setTextColor(ContextCompat.getColor(context, R.color.brand_text))
                 setTextSize(android.util.TypedValue.COMPLEX_UNIT_SP, 12f)
                 setTypeface(typeface, Typeface.BOLD)
-                setPadding(0, dp(8), 0, 0)
+                setPadding(dp(12), dp(8), dp(12), dp(8))
+                background = ContextCompat.getDrawable(context, R.drawable.bg_chip)
             })
-            val price = TextView(this).apply {
+
+            val bottomRow = LinearLayout(this).apply {
+                orientation = LinearLayout.HORIZONTAL
+                setPadding(0, dp(14), 0, 0)
+            }
+            bottomRow.addView(TextView(this).apply {
                 text = formatMoney(service.priceCents)
                 setTextColor(ContextCompat.getColor(context, R.color.brand_text))
-                setTextSize(android.util.TypedValue.COMPLEX_UNIT_SP, 15f)
+                setTextSize(android.util.TypedValue.COMPLEX_UNIT_SP, 28f)
                 setTypeface(typeface, Typeface.BOLD)
-            }
+                layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
+            })
+            bottomRow.addView(TextView(this).apply {
+                text = "${service.addOns.size} extras"
+                setTextColor(ContextCompat.getColor(context, R.color.brand_muted))
+                setTextSize(android.util.TypedValue.COMPLEX_UNIT_SP, 12f)
+                setTypeface(typeface, Typeface.BOLD)
+            })
 
-            row.addView(image)
-            row.addView(body)
-            row.addView(price)
-            card.addView(row)
+            body.addView(topRow)
+            body.addView(bottomRow)
+            wrapper.addView(image)
+            wrapper.addView(body)
+            card.addView(wrapper)
             servicesContainer.addView(card)
         }
     }
@@ -188,7 +191,7 @@ class BookingActivity : BaseDrawerActivity() {
 
         service.addOns.forEach { addOn ->
             val card = MaterialCardView(this).apply {
-                radius = dp(18).toFloat()
+                radius = dp(20).toFloat()
                 setCardBackgroundColor(ContextCompat.getColor(context, android.R.color.white))
                 cardElevation = 0f
                 layoutParams = LinearLayout.LayoutParams(
@@ -226,7 +229,7 @@ class BookingActivity : BaseDrawerActivity() {
                 setPadding(0, dp(4), 0, 0)
             })
             val meta = TextView(this).apply {
-                text = "+${formatMoney(addOn.priceCents)}  +${addOn.durationMinutes} min"
+                text = "+${formatMoney(addOn.priceCents)} / +${addOn.durationMinutes} min"
                 setTextColor(ContextCompat.getColor(context, R.color.brand_text))
                 setTextSize(android.util.TypedValue.COMPLEX_UNIT_SP, 12f)
                 setTypeface(typeface, Typeface.BOLD)
@@ -256,8 +259,9 @@ class BookingActivity : BaseDrawerActivity() {
         summaryText.text = buildString {
             append(service.name)
             append("\n")
-            append("Total: ${formatMoney(totalPrice(service))}")
-            append("  ${totalDuration(service)} min")
+            append("Base ${formatMoney(service.priceCents)} / Total ${formatMoney(totalPrice(service))}")
+            append("\n")
+            append("Duration ${totalDuration(service)} min")
             append("\n")
             append(addOnNames)
         }
@@ -278,7 +282,7 @@ class BookingActivity : BaseDrawerActivity() {
 
     private fun messageCard(message: String): MaterialCardView {
         val card = MaterialCardView(this).apply {
-            radius = dp(18).toFloat()
+            radius = dp(20).toFloat()
             setCardBackgroundColor(ContextCompat.getColor(context, android.R.color.white))
             cardElevation = 0f
         }

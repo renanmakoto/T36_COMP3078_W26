@@ -20,7 +20,10 @@ object ApiClient {
     private val client = OkHttpClient()
     private val jsonType = "application/json; charset=utf-8".toMediaType()
 
+    @Volatile
     var accessToken: String? = null
+
+    @Volatile
     var refreshToken: String? = null
 
     fun login(
@@ -204,12 +207,7 @@ object ApiClient {
         onSuccess: (JSONArray) -> Unit,
         onError: (String) -> Unit
     ) {
-        getArray(
-            "/admin/analytics/bookings-per-day?month=$month",
-            authenticated = true,
-            onSuccess = onSuccess,
-            onError = onError
-        )
+        getArray("/admin/analytics/bookings-per-day?month=$month", authenticated = true, onSuccess = onSuccess, onError = onError)
     }
 
     fun getBookingsPerMonth(
@@ -217,12 +215,7 @@ object ApiClient {
         onSuccess: (JSONArray) -> Unit,
         onError: (String) -> Unit
     ) {
-        getArray(
-            "/admin/analytics/bookings-per-month?year=$year",
-            authenticated = true,
-            onSuccess = onSuccess,
-            onError = onError
-        )
+        getArray("/admin/analytics/bookings-per-month?year=$year", authenticated = true, onSuccess = onSuccess, onError = onError)
     }
 
     fun getNoShowRate(
@@ -238,9 +231,18 @@ object ApiClient {
         onSuccess: (JSONObject) -> Unit,
         onError: (String) -> Unit
     ) {
-        val builder = Request.Builder().url(url(path)).get()
-        if (authenticated) accessToken?.let { builder.addHeader("Authorization", "Bearer $it") }
-        client.newCall(builder.build()).enqueue(jsonCallback(onSuccess, onError))
+        enqueueJsonRequest(
+            authenticated = authenticated,
+            buildRequest = { token ->
+                Request.Builder()
+                    .url(url(path))
+                    .get()
+                    .applyAuthHeader(token, authenticated)
+                    .build()
+            },
+            onSuccess = onSuccess,
+            onError = onError
+        )
     }
 
     private fun getArray(
@@ -249,9 +251,18 @@ object ApiClient {
         onSuccess: (JSONArray) -> Unit,
         onError: (String) -> Unit
     ) {
-        val builder = Request.Builder().url(url(path)).get()
-        if (authenticated) accessToken?.let { builder.addHeader("Authorization", "Bearer $it") }
-        client.newCall(builder.build()).enqueue(jsonArrayCallback(onSuccess, onError))
+        enqueueJsonArrayRequest(
+            authenticated = authenticated,
+            buildRequest = { token ->
+                Request.Builder()
+                    .url(url(path))
+                    .get()
+                    .applyAuthHeader(token, authenticated)
+                    .build()
+            },
+            onSuccess = onSuccess,
+            onError = onError
+        )
     }
 
     private fun post(
@@ -261,11 +272,18 @@ object ApiClient {
         onSuccess: (JSONObject) -> Unit,
         onError: (String) -> Unit
     ) {
-        val builder = Request.Builder()
-            .url(url(path))
-            .post(body.toString().toRequestBody(jsonType))
-        if (authenticated) accessToken?.let { builder.addHeader("Authorization", "Bearer $it") }
-        client.newCall(builder.build()).enqueue(jsonCallback(onSuccess, onError))
+        enqueueJsonRequest(
+            authenticated = authenticated,
+            buildRequest = { token ->
+                Request.Builder()
+                    .url(url(path))
+                    .post(body.toString().toRequestBody(jsonType))
+                    .applyAuthHeader(token, authenticated)
+                    .build()
+            },
+            onSuccess = onSuccess,
+            onError = onError
+        )
     }
 
     private fun patch(
@@ -274,57 +292,125 @@ object ApiClient {
         onSuccess: (JSONObject) -> Unit,
         onError: (String) -> Unit
     ) {
-        val builder = Request.Builder()
-            .url(url(path))
-            .patch(body.toString().toRequestBody(jsonType))
-        accessToken?.let { builder.addHeader("Authorization", "Bearer $it") }
-        client.newCall(builder.build()).enqueue(jsonCallback(onSuccess, onError))
+        enqueueJsonRequest(
+            authenticated = true,
+            buildRequest = { token ->
+                Request.Builder()
+                    .url(url(path))
+                    .patch(body.toString().toRequestBody(jsonType))
+                    .applyAuthHeader(token, authenticated = true)
+                    .build()
+            },
+            onSuccess = onSuccess,
+            onError = onError
+        )
     }
 
-    private fun url(path: String): String = "$baseUrl$path"
-
-    private fun jsonCallback(
+    private fun enqueueJsonRequest(
+        authenticated: Boolean,
+        buildRequest: (String?) -> Request,
         onSuccess: (JSONObject) -> Unit,
         onError: (String) -> Unit
-    ): Callback = object : Callback {
-        override fun onFailure(call: Call, e: IOException) {
-            onError(e.message ?: "Network error")
-        }
-
-        override fun onResponse(call: Call, response: Response) {
-            val bodyString = response.body?.string() ?: ""
-            if (response.isSuccessful) {
+    ) {
+        performRequest(
+            authenticated = authenticated,
+            buildRequest = buildRequest,
+            handleBody = { bodyString ->
                 try {
                     onSuccess(JSONObject(bodyString))
                 } catch (_: Exception) {
                     onError("Parse error")
                 }
-            } else {
-                onError(parseError(bodyString, response.code))
-            }
-        }
+            },
+            onError = onError
+        )
     }
 
-    private fun jsonArrayCallback(
+    private fun enqueueJsonArrayRequest(
+        authenticated: Boolean,
+        buildRequest: (String?) -> Request,
         onSuccess: (JSONArray) -> Unit,
         onError: (String) -> Unit
-    ): Callback = object : Callback {
-        override fun onFailure(call: Call, e: IOException) {
-            onError(e.message ?: "Network error")
-        }
-
-        override fun onResponse(call: Call, response: Response) {
-            val bodyString = response.body?.string() ?: ""
-            if (response.isSuccessful) {
+    ) {
+        performRequest(
+            authenticated = authenticated,
+            buildRequest = buildRequest,
+            handleBody = { bodyString ->
                 try {
                     onSuccess(JSONArray(bodyString))
                 } catch (_: Exception) {
                     onError("Parse error")
                 }
-            } else {
-                onError(parseError(bodyString, response.code))
+            },
+            onError = onError
+        )
+    }
+
+    private fun performRequest(
+        authenticated: Boolean,
+        buildRequest: (String?) -> Request,
+        handleBody: (String) -> Unit,
+        onError: (String) -> Unit,
+        retried: Boolean = false
+    ) {
+        client.newCall(buildRequest(accessToken)).enqueue(object : Callback {
+            override fun onFailure(call: Call, e: IOException) {
+                onError(e.message ?: "Network error")
             }
+
+            override fun onResponse(call: Call, response: Response) {
+                val bodyString = response.body?.string().orEmpty()
+
+                if (response.code == 401 && authenticated && !retried && refreshAccessTokenBlocking()) {
+                    response.close()
+                    performRequest(
+                        authenticated = authenticated,
+                        buildRequest = buildRequest,
+                        handleBody = handleBody,
+                        onError = onError,
+                        retried = true
+                    )
+                    return
+                }
+
+                if (response.isSuccessful) {
+                    handleBody(bodyString)
+                } else {
+                    onError(parseError(bodyString, response.code))
+                }
+            }
+        })
+    }
+
+    @Synchronized
+    private fun refreshAccessTokenBlocking(): Boolean {
+        val refresh = refreshToken ?: return false
+        return try {
+            val request = Request.Builder()
+                .url(url("/auth/token/refresh"))
+                .post(JSONObject().put("refresh", refresh).toString().toRequestBody(jsonType))
+                .build()
+            client.newCall(request).execute().use { response ->
+                if (!response.isSuccessful) return false
+                val bodyString = response.body?.string().orEmpty()
+                val json = JSONObject(bodyString)
+                val nextAccess = json.optString("access")
+                if (nextAccess.isBlank()) return false
+                accessToken = nextAccess
+                true
+            }
+        } catch (_: Exception) {
+            false
         }
+    }
+
+    private fun url(path: String): String = "$baseUrl$path"
+
+    private fun Request.Builder.applyAuthHeader(token: String?, authenticated: Boolean): Request.Builder {
+        if (authenticated && !token.isNullOrBlank()) {
+            addHeader("Authorization", "Bearer $token")
+        }
+        return this
     }
 
     private fun parseError(bodyString: String, statusCode: Int): String {

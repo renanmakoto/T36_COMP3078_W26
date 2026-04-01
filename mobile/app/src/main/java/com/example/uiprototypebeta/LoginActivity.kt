@@ -8,24 +8,34 @@ import com.example.uiprototypebeta.databinding.ActivityLoginBinding
 
 class LoginActivity : AppCompatActivity() {
 
-    private lateinit var b: ActivityLoginBinding
+    private lateinit var binding: ActivityLoginBinding
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        b = ActivityLoginBinding.inflate(layoutInflater)
-        setContentView(b.root)
+        binding = ActivityLoginBinding.inflate(layoutInflater)
+        setContentView(binding.root)
 
-        // Pre-fill with seed user credentials
-        b.etEmail.setText("daniel@example.com")
-        b.etPassword.setText("Test1234!")
+        if (PendingBookingDraftStore.hasDraft(this)) {
+            binding.tvHint.text = "Sign in to continue your saved booking, or finish login and choose a different service."
+        }
 
-        b.btnSignIn.setOnClickListener {
-            val email = b.etEmail.text?.toString()?.trim().orEmpty()
-            val password = b.etPassword.text?.toString()?.trim().orEmpty()
+        intent.getStringExtra("prefill_email")?.takeIf { it.isNotBlank() }?.let { binding.etEmail.setText(it) }
 
-            b.btnSignIn.isEnabled = false
-            b.btnSignIn.text = "Signing in..."
+        binding.btnSignIn.setOnClickListener {
+            val email = binding.etEmail.text?.toString()?.trim().orEmpty()
+            val password = binding.etPassword.text?.toString()?.trim().orEmpty()
 
-            ApiClient.login(email, password,
+            if (email.isBlank() || password.isBlank()) {
+                Toast.makeText(this, "Enter email and password", Toast.LENGTH_SHORT).show()
+                return@setOnClickListener
+            }
+
+            binding.btnSignIn.isEnabled = false
+            binding.btnSignIn.text = "Signing in..."
+
+            ApiClient.login(
+                email = email,
+                password = password,
                 onSuccess = { json ->
                     val access = json.getString("access")
                     val refresh = json.getString("refresh")
@@ -41,40 +51,47 @@ class LoginActivity : AppCompatActivity() {
 
                         if (role == "ADMIN") {
                             UserSession.clear()
-                            ApiClient.accessToken = access
-                            ApiClient.refreshToken = refresh
                             AdminSession.isLoggedIn = true
+                            AdminSession.displayName = displayName
+                            AdminSession.email = userEmail
                             Toast.makeText(this, "Signed in as admin", Toast.LENGTH_SHORT).show()
-                            startActivity(Intent(this, AdminDashboardActivity::class.java))
+                            startActivity(Intent(this, WebAdminActivity::class.java).apply {
+                                putExtra("title", "Admin dashboard")
+                                putExtra("path", "/admin/dashboard")
+                            })
                         } else {
                             AdminSession.clear()
-                            ApiClient.accessToken = access
-                            ApiClient.refreshToken = refresh
                             UserSession.isLoggedIn = true
                             UserSession.displayName = displayName
                             UserSession.userId = userId
                             UserSession.userEmail = userEmail
                             Toast.makeText(this, "Signed in as $userEmail", Toast.LENGTH_SHORT).show()
-                            startActivity(Intent(this, UserDashboardActivity::class.java))
+
+                            val draftIntent = PendingBookingDraftStore.draftIntent(this)
+                            if (draftIntent != null) {
+                                startActivity(draftIntent)
+                            } else {
+                                startActivity(Intent(this, UserDashboardActivity::class.java))
+                            }
                         }
                         finish()
                     }
                 },
                 onError = { msg ->
                     runOnUiThread {
-                        b.btnSignIn.isEnabled = true
-                        b.btnSignIn.text = "Sign in"
+                        binding.btnSignIn.isEnabled = true
+                        binding.btnSignIn.text = "Sign in"
                         Toast.makeText(this, "Login failed: $msg", Toast.LENGTH_LONG).show()
                     }
                 }
             )
         }
 
-        b.btnGuest.setOnClickListener {
+        binding.btnGuest.setOnClickListener {
             startActivity(Intent(this, HomeActivity::class.java))
         }
 
-        b.btnSignUp.setOnClickListener {
+        binding.btnSignUp.setOnClickListener {
             startActivity(Intent(this, SignUpActivity::class.java))
         }
     }

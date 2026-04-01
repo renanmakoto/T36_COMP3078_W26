@@ -1,7 +1,8 @@
 'use client';
 
 import Link from 'next/link';
-import type { ReactNode } from 'react';
+import { usePathname } from 'next/navigation';
+import { useState, type ReactNode } from 'react';
 
 export const inputClass =
   'w-full rounded-xl border border-[#e5e4ef] bg-white px-3 py-3 text-sm outline-none ring-[#5b4fe5]/40 focus:ring-2';
@@ -27,17 +28,53 @@ export function AdminPageHeader({
   actions?: ReactNode;
 }) {
   return (
-    <div className="flex flex-wrap items-start justify-between gap-3">
-      <div>
-        <h1 className="text-3xl font-bold text-[#0f0a1e]">{title}</h1>
-        <p className="mt-1 max-w-3xl text-sm text-[#5a5872]">{description}</p>
+    <div className="space-y-4">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h1 className="text-3xl font-bold text-[#0f0a1e]">{title}</h1>
+          <p className="mt-1 max-w-3xl text-sm text-[#5a5872]">{description}</p>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          {actions}
+          <Link href={backHref} className={secondaryButtonClass}>
+            {backLabel}
+          </Link>
+        </div>
       </div>
-      <div className="flex flex-wrap gap-2">
-        {actions}
-        <Link href={backHref} className={secondaryButtonClass}>
-          {backLabel}
-        </Link>
-      </div>
+      <AdminSectionNav />
+    </div>
+  );
+}
+
+const adminNavItems = [
+  { href: '/admin/dashboard', label: 'Overview' },
+  { href: '/admin/dashboard/analytics', label: 'Analytics' },
+  { href: '/admin/dashboard/bookings', label: 'Bookings' },
+  { href: '/admin/dashboard/services', label: 'Services' },
+  { href: '/admin/dashboard/portfolio', label: 'Portfolio' },
+  { href: '/admin/dashboard/blog', label: 'Blog' },
+  { href: '/admin/dashboard/testimonials', label: 'Reviews' },
+];
+
+export function AdminSectionNav() {
+  const pathname = usePathname();
+
+  return (
+    <div className="flex flex-wrap gap-2 rounded-[1.5rem] border border-[#ecebf5] bg-white p-2 shadow-sm">
+      {adminNavItems.map((item) => {
+        const active = pathname === item.href;
+        return (
+          <Link
+            key={item.href}
+            href={item.href}
+            className={`rounded-full px-4 py-2 text-sm font-semibold transition ${
+              active ? 'bg-[#1a132f] !text-white' : 'text-[#1a132f] hover:bg-[#f5f3fb]'
+            }`}
+          >
+            {item.label}
+          </Link>
+        );
+      })}
     </div>
   );
 }
@@ -165,21 +202,112 @@ export function formatDateTime(value: string) {
     day: 'numeric',
     hour: 'numeric',
     minute: '2-digit',
+    timeZone: 'America/Toronto',
   }).format(new Date(value));
+}
+
+export function ImageUploadField({
+  label,
+  hint,
+  value,
+  kind,
+  onChange,
+  onUpload,
+}: {
+  label: string;
+  hint?: string;
+  value: string;
+  kind: 'service' | 'portfolio' | 'blog' | 'misc';
+  onChange: (value: string) => void;
+  onUpload: (file: File, kind: 'service' | 'portfolio' | 'blog' | 'misc') => Promise<string>;
+}) {
+  const [file, setFile] = useState<File | null>(null);
+  const [uploading, setUploading] = useState(false);
+  const [uploadError, setUploadError] = useState('');
+
+  async function handleUpload() {
+    if (!file) return;
+    setUploading(true);
+    setUploadError('');
+    try {
+      const nextUrl = await onUpload(file, kind);
+      onChange(nextUrl);
+      setFile(null);
+    } catch (error: unknown) {
+      setUploadError(error instanceof Error ? error.message : 'Failed to upload image.');
+    } finally {
+      setUploading(false);
+    }
+  }
+
+  return (
+    <div className="space-y-3 rounded-2xl border border-[#ecebf5] bg-[#fcfcff] p-4">
+      <Field label={label} hint={hint}>
+        <input
+          value={value}
+          onChange={(event) => onChange(event.target.value)}
+          className={inputClass}
+          placeholder="https://... or upload from your device below"
+        />
+      </Field>
+
+      <div className="flex flex-wrap items-center gap-3">
+        <input
+          type="file"
+          accept="image/*"
+          onChange={(event) => setFile(event.target.files?.[0] ?? null)}
+          className="block text-sm text-[#5a5872] file:mr-3 file:rounded-full file:border-0 file:bg-[#1a132f] file:px-4 file:py-2 file:text-sm file:font-semibold file:text-white hover:file:brightness-110"
+        />
+        <button
+          type="button"
+          onClick={handleUpload}
+          disabled={!file || uploading}
+          className={`rounded-xl px-4 py-3 text-sm font-semibold ${
+            file && !uploading
+              ? 'bg-[#1a132f] text-white hover:brightness-110'
+              : 'cursor-not-allowed bg-[#e9e8f5] text-[#7b7794]'
+          }`}
+        >
+          {uploading ? 'Uploading...' : 'Upload image'}
+        </button>
+      </div>
+
+      {uploadError ? <p className="text-sm font-semibold text-red-600">{uploadError}</p> : null}
+
+      {value ? (
+        <div className="overflow-hidden rounded-2xl border border-[#ecebf5] bg-white">
+          <div className="aspect-[16/10] bg-cover bg-center" style={{ backgroundImage: `url(${value})` }} />
+          <div className="p-3 text-xs text-[#7b7794]">Current image preview</div>
+        </div>
+      ) : null}
+    </div>
+  );
 }
 
 export function formatDateInput(value: string) {
   const date = new Date(value);
-  const year = date.getFullYear();
-  const month = `${date.getMonth() + 1}`.padStart(2, '0');
-  const day = `${date.getDate()}`.padStart(2, '0');
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    timeZone: 'America/Toronto',
+  }).formatToParts(date);
+  const year = parts.find((part) => part.type === 'year')?.value ?? '0000';
+  const month = parts.find((part) => part.type === 'month')?.value ?? '01';
+  const day = parts.find((part) => part.type === 'day')?.value ?? '01';
   return `${year}-${month}-${day}`;
 }
 
 export function formatTimeInput(value: string) {
   const date = new Date(value);
-  const hours = `${date.getHours()}`.padStart(2, '0');
-  const minutes = `${date.getMinutes()}`.padStart(2, '0');
+  const parts = new Intl.DateTimeFormat('en-GB', {
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+    timeZone: 'America/Toronto',
+  }).formatToParts(date);
+  const hours = parts.find((part) => part.type === 'hour')?.value ?? '00';
+  const minutes = parts.find((part) => part.type === 'minute')?.value ?? '00';
   return `${hours}:${minutes}`;
 }
 

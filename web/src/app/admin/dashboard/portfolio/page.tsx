@@ -7,12 +7,14 @@ import {
   apiCreateAdminPortfolioItem,
   apiGetAdminPortfolioItems,
   apiUpdateAdminPortfolioItem,
+  apiUploadAdminImage,
   type AdminPortfolioItemData,
 } from '../../../api';
 import {
   AdminPageHeader,
   EditableRow,
   Field,
+  ImageUploadField,
   NoticeBanner,
   Toggle,
   inputClass,
@@ -45,7 +47,7 @@ const initialForm: PortfolioFormState = {
 };
 
 export default function AdminPortfolioPage() {
-  const { role } = useSession();
+  const { isReady, role } = useSession();
   const router = useRouter();
   const [items, setItems] = useState<AdminPortfolioItemData[]>([]);
   const [form, setForm] = useState<PortfolioFormState>(initialForm);
@@ -56,13 +58,14 @@ export default function AdminPortfolioPage() {
   const [notice, setNotice] = useState('');
 
   useEffect(() => {
+    if (!isReady) return;
     if (role !== 'admin') {
       router.replace('/login');
       return;
     }
 
     loadData();
-  }, [role, router]);
+  }, [isReady, role, router]);
 
   async function loadData() {
     setLoading(true);
@@ -106,6 +109,13 @@ export default function AdminPortfolioPage() {
     setForm(initialForm);
   }
 
+  async function handleImageUpload(file: File, kind: 'service' | 'portfolio' | 'blog' | 'misc') {
+    const response = await apiUploadAdminImage(file, kind);
+    setNotice('Image uploaded successfully.');
+    setError('');
+    return response.url;
+  }
+
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setSaving(true);
@@ -140,7 +150,7 @@ export default function AdminPortfolioPage() {
     }
   }
 
-  if (role !== 'admin') return null;
+  if (!isReady || role !== 'admin') return null;
 
   return (
     <div className="space-y-6">
@@ -180,14 +190,14 @@ export default function AdminPortfolioPage() {
                   placeholder="Fade"
                 />
               </Field>
-              <Field label="Image URL">
-                <input
-                  value={form.image_url}
-                  onChange={(event) => setForm((current) => ({ ...current, image_url: event.target.value }))}
-                  className={inputClass}
-                  placeholder="https://..."
-                />
-              </Field>
+              <ImageUploadField
+                label="Portfolio image"
+                hint="Paste a URL or upload from your device"
+                kind="portfolio"
+                value={form.image_url}
+                onChange={(value) => setForm((current) => ({ ...current, image_url: value }))}
+                onUpload={handleImageUpload}
+              />
             </div>
             <Field label="Description">
               <textarea

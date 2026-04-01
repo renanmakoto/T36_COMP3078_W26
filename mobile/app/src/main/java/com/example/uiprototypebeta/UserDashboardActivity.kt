@@ -38,8 +38,11 @@ class UserDashboardActivity : BaseDrawerActivity() {
         val id: String,
         val serviceId: String,
         val serviceTitle: String,
-        val servicePriceCents: Int,
-        val serviceDurationMinutes: Int,
+        val basePriceCents: Int,
+        val totalPriceCents: Int,
+        val totalDurationMinutes: Int,
+        val addOnIds: List<String>,
+        val addOnNames: List<String>,
         val startMillis: Long,
         val status: String
     )
@@ -141,14 +144,25 @@ class UserDashboardActivity : BaseDrawerActivity() {
             val obj = array.optJSONObject(i) ?: continue
             val service = obj.optJSONObject("service") ?: continue
             val start = parseIsoMillis(obj.optString("start_time")) ?: continue
+            val addOnsArray = obj.optJSONArray("add_ons") ?: JSONArray()
+            val addOnIds = mutableListOf<String>()
+            val addOnNames = mutableListOf<String>()
+            for (index in 0 until addOnsArray.length()) {
+                val addOn = addOnsArray.optJSONObject(index) ?: continue
+                addOnIds.add(addOn.optString("id"))
+                addOnNames.add(addOn.optString("name"))
+            }
 
             result.add(
                 AppointmentUi(
                     id = obj.optString("id"),
                     serviceId = service.optString("id"),
                     serviceTitle = service.optString("name", "Service"),
-                    servicePriceCents = service.optInt("price_cents", 0),
-                    serviceDurationMinutes = service.optInt("duration_minutes", 0),
+                    basePriceCents = service.optInt("price_cents", 0),
+                    totalPriceCents = obj.optInt("total_price_cents", service.optInt("price_cents", 0)),
+                    totalDurationMinutes = obj.optInt("total_duration_minutes", service.optInt("duration_minutes", 0)),
+                    addOnIds = addOnIds,
+                    addOnNames = addOnNames,
                     startMillis = start,
                     status = obj.optString("status", "CONFIRMED")
                 )
@@ -276,9 +290,11 @@ class UserDashboardActivity : BaseDrawerActivity() {
                     val intent = Intent(this@UserDashboardActivity, BookingScheduleActivity::class.java).apply {
                         putExtra("service_id", item.serviceId)
                         putExtra("service_title", item.serviceTitle)
-                        putExtra("service_price", item.servicePriceCents)
-                        putExtra("service_duration", item.serviceDurationMinutes)
+                        putExtra("service_price", item.totalPriceCents)
+                        putExtra("service_duration", item.totalDurationMinutes)
                         putExtra("reschedule_id", item.id)
+                        putStringArrayListExtra("add_on_ids", ArrayList(item.addOnIds))
+                        putStringArrayListExtra("add_on_names", ArrayList(item.addOnNames))
                     }
                     startActivity(intent)
                 }
@@ -335,7 +351,9 @@ class UserDashboardActivity : BaseDrawerActivity() {
     }
 
     private fun formatDateTime(millis: Long): String {
-        return SimpleDateFormat("EEE, MMM d - h:mm a", Locale.getDefault()).format(Date(millis))
+        return SimpleDateFormat("EEE, MMM d - h:mm a", Locale.getDefault()).apply {
+            timeZone = TimeZone.getTimeZone("America/Toronto")
+        }.format(Date(millis))
     }
 
     private fun dp(value: Int): Int {

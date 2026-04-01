@@ -1,5 +1,6 @@
 package com.example.uiprototypebeta
 
+import android.content.Intent
 import android.os.Bundle
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
@@ -34,6 +35,9 @@ class SignUpActivity : AppCompatActivity() {
                 onSuccess = {
                     runOnUiThread {
                         Toast.makeText(this, "Account created! Please sign in.", Toast.LENGTH_SHORT).show()
+                        startActivity(Intent(this, LoginActivity::class.java).apply {
+                            putExtra("prefill_email", email)
+                        })
                         finish()
                     }
                 },

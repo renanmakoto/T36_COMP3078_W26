@@ -57,3 +57,42 @@ ALLOWED_HOSTS=localhost,127.0.0.1
 - Slots are in 15-minute increments.
 - Business hours are 10:00 to 19:00.
 - The last slot starts at 18:45.
+
+---
+
+## Transactional Email (Resend)
+
+The booking system now supports transactional email from the Django backend.
+Web and mobile clients do not talk to Resend directly. They only call the booking API.
+
+### Supported events
+- Booking created
+- Booking rescheduled
+- Booking cancelled
+- Booking marked as no-show
+
+### Current behavior
+- Client notifications are sent to the appointment email.
+- Owner notifications are sent to `RESEND_OWNER_EMAIL`.
+- Emails are sent only after the booking change is committed.
+- Each send is tracked in `AppointmentEmailNotification`.
+- Resend webhook events can be received at `POST /webhooks/resend`.
+
+### Required environment variables
+```env
+BOOKING_EMAILS_ENABLED=true
+RESEND_API_KEY=re_xxxxxxxxx
+RESEND_FROM_EMAIL=bookings@mail.example.com
+RESEND_OWNER_EMAIL=owner@example.com
+RESEND_WEBHOOK_SECRET=whsec_xxxxxxxxx
+FRONTEND_BASE_URL=https://your-frontend-host
+BUSINESS_NAME=BrazWebDes Hairstylist Booking
+BUSINESS_ADDRESS=Toronto, ON
+BUSINESS_PHONE=+1 000 000 0000
+BOOKING_REPLY_TO=support@example.com
+```
+
+### Notes
+- The `from` address must belong to a verified domain in Resend.
+- Current email action links send users into the authenticated web flow.
+- Public one-click cancel/reschedule links are not implemented yet and should use signed tokens when added.

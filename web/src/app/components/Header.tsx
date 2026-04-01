@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useMemo } from 'react';
 import { useSession } from '../session-context';
+import { siteConfig } from '../site-config';
 
 const navLinks = [
   { href: '/', label: 'Home' },
@@ -31,8 +32,8 @@ export function Header() {
             HB
           </div>
           <div>
-            <p className="text-sm text-[#6b6b6b]">BrazWebDes</p>
-            <p className="text-base font-semibold text-[#1a132f]">Hairstylist Booking</p>
+            <p className="text-sm text-[#6b6b6b]">{siteConfig.brandName}</p>
+            <p className="text-base font-semibold text-[#1a132f]">{siteConfig.studioName}</p>
           </div>
         </div>
 
