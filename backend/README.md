@@ -87,7 +87,7 @@ RESEND_OWNER_EMAIL=owner@example.com
 RESEND_WEBHOOK_SECRET=whsec_xxxxxxxxx
 FRONTEND_BASE_URL=https://your-frontend-host
 BUSINESS_NAME=BrazWebDes Hairstylist Booking
-BUSINESS_ADDRESS=Toronto, ON
+BUSINESS_ADDRESS=230 Woolner Avenue, Toronto, ON
 BUSINESS_PHONE=+1 000 000 0000
 BOOKING_REPLY_TO=support@example.com
 ```

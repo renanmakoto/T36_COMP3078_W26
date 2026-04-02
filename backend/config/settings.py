@@ -206,7 +206,7 @@ SIMPLE_JWT = {
 
 FRONTEND_BASE_URL = os.getenv("FRONTEND_BASE_URL", "http://127.0.0.1:3000").rstrip("/")
 BUSINESS_NAME = os.getenv("BUSINESS_NAME", "BrazWebDes Hairstylist Booking")
-BUSINESS_ADDRESS = os.getenv("BUSINESS_ADDRESS", "Toronto, ON")
+BUSINESS_ADDRESS = os.getenv("BUSINESS_ADDRESS", "230 Woolner Avenue, Toronto, ON")
 BUSINESS_PHONE = os.getenv("BUSINESS_PHONE", "")
 BOOKING_REPLY_TO = os.getenv("BOOKING_REPLY_TO", "").strip()
 RESEND_API_KEY = os.getenv("RESEND_API_KEY", "").strip()
