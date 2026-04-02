@@ -1,14 +1,18 @@
 package com.example.uiprototypebeta
 
+import android.content.Intent
 import android.os.Bundle
+import android.view.View
 import android.widget.CalendarView
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import com.example.uiprototypebeta.databinding.ActivityBookingScheduleBinding
 import com.google.android.material.chip.Chip
+import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Locale
+import java.util.TimeZone
 
 class BookingScheduleActivity : AppCompatActivity() {
 
@@ -19,6 +23,15 @@ class BookingScheduleActivity : AppCompatActivity() {
     private var availableSlots: List<String> = emptyList()
     private var rescheduleId: String? = null
     private var addOnIds: List<String> = emptyList()
+    private var addOnNames: List<String> = emptyList()
+    private var serviceId: String = ""
+    private var serviceTitle: String = ""
+    private var basePriceCents: Int = 0
+    private var totalPriceCents: Int = 0
+    private var serviceDuration: Int = 0
+    private var pendingResumePrompt: Boolean = false
+    private var savedSlotForPrompt: String? = null
+    private var resumePromptHandled = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -26,23 +39,39 @@ class BookingScheduleActivity : AppCompatActivity() {
         setContentView(binding.root)
 
         rescheduleId = intent.getStringExtra("reschedule_id")
-
-        val serviceId = intent.getStringExtra("service_id") ?: return finish()
-        val serviceTitle = intent.getStringExtra("service_title").orEmpty()
-        val servicePrice = intent.getIntExtra("service_price", 0)
-        val serviceDuration = intent.getIntExtra("service_duration", 0)
-        val addOnNames = intent.getStringArrayListExtra("add_on_names")?.toList().orEmpty()
+        serviceId = intent.getStringExtra("service_id").orEmpty()
+        serviceTitle = intent.getStringExtra("service_title").orEmpty()
+        basePriceCents = intent.getIntExtra("service_base_price", intent.getIntExtra("service_price", 0))
+        totalPriceCents = intent.getIntExtra("service_total_price", intent.getIntExtra("service_price", 0))
+        serviceDuration = intent.getIntExtra("service_duration", 0)
+        addOnNames = intent.getStringArrayListExtra("add_on_names")?.toList().orEmpty()
         addOnIds = intent.getStringArrayListExtra("add_on_ids")?.toList().orEmpty()
+        pendingResumePrompt = intent.getBooleanExtra("show_resume_prompt", false)
+        savedSlotForPrompt = intent.getStringExtra("selected_slot")
 
+        if (serviceId.isBlank()) {
+            finish()
+            return
+        }
+
+        val startCalendar = Calendar.getInstance(TimeZone.getTimeZone("America/Toronto"))
+        binding.calendarBooking.minDate = startCalendar.timeInMillis
+        binding.toolbar.title = if (rescheduleId != null) "Reschedule appointment" else "Booking"
         binding.toolbar.setNavigationOnClickListener { finish() }
-        binding.tvServiceSummary.text = buildSummary(serviceTitle, servicePrice, serviceDuration, addOnNames)
+        binding.tvScreenTitle.text = if (rescheduleId != null) "Reschedule appointment" else "Pick date and time"
+        binding.tvScheduleHint.text =
+            if (rescheduleId != null) "Choose a new Toronto time for this booking."
+            else "Review the live Toronto schedule before you confirm."
+        binding.btnConfirmSlot.text = if (rescheduleId != null) "Confirm new time" else "Confirm booking"
+        binding.tvGuestHint.visibility = if (UserSession.isLoggedIn) View.GONE else View.VISIBLE
 
-        val startCalendar = Calendar.getInstance()
-        setSelectedDate(startCalendar)
-        loadSlotsFromApi(selectedDateKey!!, serviceDuration)
+        val selectedDateFromIntent = intent.getStringExtra("selected_date")
+        val initialCalendar = parseDateKeyToCalendar(selectedDateFromIntent) ?: startCalendar
+        setSelectedDate(initialCalendar)
+        binding.calendarBooking.date = initialCalendar.timeInMillis
 
         binding.calendarBooking.setOnDateChangeListener { _: CalendarView, year: Int, month: Int, dayOfMonth: Int ->
-            val calendar = Calendar.getInstance().apply {
+            val calendar = Calendar.getInstance(TimeZone.getTimeZone("America/Toronto")).apply {
                 set(Calendar.YEAR, year)
                 set(Calendar.MONTH, month)
                 set(Calendar.DAY_OF_MONTH, dayOfMonth)
@@ -51,6 +80,8 @@ class BookingScheduleActivity : AppCompatActivity() {
                 set(Calendar.SECOND, 0)
                 set(Calendar.MILLISECOND, 0)
             }
+            selectedSlot = null
+            savedSlotForPrompt = null
             setSelectedDate(calendar)
             loadSlotsFromApi(selectedDateKey!!, serviceDuration)
         }
@@ -64,60 +95,35 @@ class BookingScheduleActivity : AppCompatActivity() {
             }
 
             if (!UserSession.isLoggedIn) {
-                Toast.makeText(this, "Please sign in to book", Toast.LENGTH_SHORT).show()
+                val draft = PendingBookingDraft(
+                    serviceId = serviceId,
+                    serviceTitle = serviceTitle,
+                    basePriceCents = basePriceCents,
+                    totalPriceCents = totalPriceCents,
+                    durationMinutes = serviceDuration,
+                    addOnIds = addOnIds,
+                    addOnNames = addOnNames,
+                    selectedDate = date,
+                    selectedSlot = slot
+                )
+                PendingBookingDraftStore.save(this, draft)
+                showSignInPrompt()
                 return@setOnClickListener
             }
 
-            binding.btnConfirmSlot.isEnabled = false
-            binding.btnConfirmSlot.text = "Booking..."
-
-            val existingId = rescheduleId
-            if (existingId != null) {
-                ApiClient.rescheduleAppointment(
-                    existingId,
-                    date,
-                    slot,
-                    onSuccess = {
-                        runOnUiThread {
-                            Toast.makeText(this, "Rescheduled!", Toast.LENGTH_SHORT).show()
-                            finish()
-                        }
-                    },
-                    onError = { message ->
-                        runOnUiThread {
-                            binding.btnConfirmSlot.isEnabled = true
-                            binding.btnConfirmSlot.text = "Confirm time"
-                            Toast.makeText(this, "Failed: $message", Toast.LENGTH_LONG).show()
-                        }
-                    }
-                )
-            } else {
-                ApiClient.createAppointment(
-                    serviceId = serviceId,
-                    addOnIds = addOnIds,
-                    date = date,
-                    startTime = slot,
-                    onSuccess = {
-                        runOnUiThread {
-                            Toast.makeText(this, "Appointment booked!", Toast.LENGTH_SHORT).show()
-                            finish()
-                        }
-                    },
-                    onError = { message ->
-                        runOnUiThread {
-                            binding.btnConfirmSlot.isEnabled = true
-                            binding.btnConfirmSlot.text = "Confirm time"
-                            Toast.makeText(this, "Failed: $message", Toast.LENGTH_LONG).show()
-                        }
-                    }
-                )
-            }
+            submitBooking(date, slot)
         }
+
+        loadSlotsFromApi(selectedDateKey!!, serviceDuration)
+        refreshSummary()
     }
 
     private fun setSelectedDate(calendar: Calendar) {
         selectedDateKey = dateKey(calendar)
-        binding.tvSelectedDate.text = SimpleDateFormat("EEE, MMM d", Locale.getDefault()).format(calendar.time)
+        binding.tvSelectedDate.text = SimpleDateFormat("EEE, MMM d", Locale.getDefault()).apply {
+            timeZone = TimeZone.getTimeZone("America/Toronto")
+        }.format(calendar.time)
+        refreshSummary()
     }
 
     private fun loadSlotsFromApi(dateKey: String, durationMinutes: Int) {
@@ -135,18 +141,146 @@ class BookingScheduleActivity : AppCompatActivity() {
                     slots.add(slotsArray.getString(index))
                 }
                 availableSlots = slots
-                runOnUiThread { renderSlots() }
+                runOnUiThread {
+                    renderSlots()
+                    maybeShowResumePrompt()
+                }
             },
             onError = { message ->
                 runOnUiThread {
                     Toast.makeText(this, "Failed to load slots: $message", Toast.LENGTH_SHORT).show()
+                    renderSlots()
                 }
             }
         )
     }
 
+    private fun maybeShowResumePrompt() {
+        if (!pendingResumePrompt || resumePromptHandled) return
+        resumePromptHandled = true
+        val restoredSlot = savedSlotForPrompt
+        if (restoredSlot.isNullOrBlank()) {
+            PendingBookingDraftStore.clear(this)
+            return
+        }
+
+        if (availableSlots.contains(restoredSlot)) {
+            MaterialAlertDialogBuilder(this)
+                .setTitle("Continue your saved booking?")
+                .setMessage(
+                    "Your previous service, date, and time were saved before sign-in. Continue with $serviceTitle on " +
+                        "${binding.tvSelectedDate.text} at ${to12Hour(restoredSlot)}, or go back and choose another option."
+                )
+                .setPositiveButton("Continue") { _, _ ->
+                    selectedSlot = restoredSlot
+                    PendingBookingDraftStore.clear(this)
+                    renderSlots()
+                }
+                .setNegativeButton("Select another service or time") { _, _ ->
+                    PendingBookingDraftStore.clear(this)
+                    startActivity(Intent(this, BookingActivity::class.java))
+                    finish()
+                }
+                .setCancelable(false)
+                .show()
+        } else {
+            MaterialAlertDialogBuilder(this)
+                .setTitle("Saved time no longer available")
+                .setMessage(
+                    "We restored your service and date, but the previous time is no longer free. Choose another time here or go back and pick another service."
+                )
+                .setPositiveButton("Choose another time") { _, _ ->
+                    PendingBookingDraftStore.clear(this)
+                    selectedSlot = null
+                    renderSlots()
+                }
+                .setNegativeButton("Select another service") { _, _ ->
+                    PendingBookingDraftStore.clear(this)
+                    startActivity(Intent(this, BookingActivity::class.java))
+                    finish()
+                }
+                .setCancelable(false)
+                .show()
+        }
+    }
+
+    private fun showSignInPrompt() {
+        MaterialAlertDialogBuilder(this)
+            .setTitle("Sign in to confirm this appointment")
+            .setMessage(
+                "You can browse the schedule without an account. To lock this time and finish the booking, sign in or create your client account first."
+            )
+            .setPositiveButton("Sign in") { _, _ ->
+                startActivity(Intent(this, LoginActivity::class.java))
+                finish()
+            }
+            .setNeutralButton("Create account") { _, _ ->
+                startActivity(Intent(this, SignUpActivity::class.java))
+                finish()
+            }
+            .setNegativeButton("Keep browsing", null)
+            .show()
+    }
+
+    private fun submitBooking(date: String, slot: String) {
+        binding.btnConfirmSlot.isEnabled = false
+        binding.btnConfirmSlot.text = if (rescheduleId != null) "Saving..." else "Booking..."
+
+        val existingId = rescheduleId
+        if (existingId != null) {
+            ApiClient.rescheduleAppointment(
+                existingId,
+                date,
+                slot,
+                onSuccess = {
+                    runOnUiThread {
+                        PendingBookingDraftStore.clear(this)
+                        Toast.makeText(this, "Appointment updated", Toast.LENGTH_SHORT).show()
+                        startActivity(Intent(this, UserDashboardActivity::class.java))
+                        finish()
+                    }
+                },
+                onError = { message ->
+                    runOnUiThread {
+                        binding.btnConfirmSlot.isEnabled = true
+                        binding.btnConfirmSlot.text = "Confirm new time"
+                        Toast.makeText(this, "Failed: $message", Toast.LENGTH_LONG).show()
+                    }
+                }
+            )
+        } else {
+            ApiClient.createAppointment(
+                serviceId = serviceId,
+                addOnIds = addOnIds,
+                date = date,
+                startTime = slot,
+                onSuccess = {
+                    runOnUiThread {
+                        PendingBookingDraftStore.clear(this)
+                        Toast.makeText(this, "Appointment booked", Toast.LENGTH_SHORT).show()
+                        startActivity(Intent(this, UserDashboardActivity::class.java))
+                        finish()
+                    }
+                },
+                onError = { message ->
+                    runOnUiThread {
+                        binding.btnConfirmSlot.isEnabled = true
+                        binding.btnConfirmSlot.text = "Confirm booking"
+                        Toast.makeText(this, "Failed: $message", Toast.LENGTH_LONG).show()
+                    }
+                }
+            )
+        }
+    }
+
     private fun renderSlots() {
         binding.chipGroupSlots.removeAllViews()
+        if (availableSlots.isEmpty()) {
+            binding.tvSlotsHint.text = "No available slots for this date."
+        } else {
+            binding.tvSlotsHint.text = "Toronto time / 15-minute grid"
+        }
+
         availableSlots.forEach { time ->
             val chip = Chip(this).apply {
                 text = to12Hour(time)
@@ -162,20 +296,52 @@ class BookingScheduleActivity : AppCompatActivity() {
             binding.chipGroupSlots.addView(chip)
         }
         binding.btnConfirmSlot.isEnabled = selectedSlot != null
+        refreshSummary()
     }
 
-    private fun buildSummary(
-        serviceTitle: String,
-        servicePrice: Int,
-        serviceDuration: Int,
-        addOnNames: List<String>
-    ): String {
-        val addOnLabel = if (addOnNames.isEmpty()) "No add-ons" else addOnNames.joinToString(", ")
-        return "$serviceTitle\n${formatMoney(servicePrice)}  ${serviceDuration} min\n$addOnLabel"
+    private fun refreshSummary() {
+        val dateLabel = selectedDateKey?.let { formatDateLabelForSummary(it) } ?: "Select a date"
+        val timeLabel = selectedSlot?.let { to12Hour(it) } ?: "Select a slot"
+        val addOnLabel = if (addOnNames.isEmpty()) "No add-ons selected" else addOnNames.joinToString(", ")
+
+        binding.tvBookingSummary.text = buildString {
+            append(serviceTitle)
+            append("\n")
+            append("Base ${formatMoney(basePriceCents)} / Total ${formatMoney(totalPriceCents.coerceAtLeast(basePriceCents))}")
+            append("\n")
+            append("Duration $serviceDuration min")
+            append("\n")
+            append("$dateLabel at $timeLabel")
+            append("\n")
+            append(addOnLabel)
+        }
     }
 
     private fun dateKey(calendar: Calendar): String {
-        return SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(calendar.time)
+        return SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).apply {
+            timeZone = TimeZone.getTimeZone("America/Toronto")
+        }.format(calendar.time)
+    }
+
+    private fun parseDateKeyToCalendar(raw: String?): Calendar? {
+        if (raw.isNullOrBlank()) return null
+        return try {
+            val date = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).apply {
+                timeZone = TimeZone.getTimeZone("America/Toronto")
+            }.parse(raw) ?: return null
+            Calendar.getInstance(TimeZone.getTimeZone("America/Toronto")).apply {
+                time = date
+            }
+        } catch (_: Exception) {
+            null
+        }
+    }
+
+    private fun formatDateLabelForSummary(dateKey: String): String {
+        val calendar = parseDateKeyToCalendar(dateKey) ?: return dateKey
+        return SimpleDateFormat("EEE, MMM d", Locale.getDefault()).apply {
+            timeZone = TimeZone.getTimeZone("America/Toronto")
+        }.format(calendar.time)
     }
 
     private fun to12Hour(time24: String): String {

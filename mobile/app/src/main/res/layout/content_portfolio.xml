@@ -18,14 +18,14 @@
             android:layout_height="wrap_content"
             android:text="Portfolio"
             android:textColor="@color/brand_text"
-            android:textSize="22sp"
+            android:textSize="24sp"
             android:textStyle="bold" />
 
         <TextView
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="6dp"
-            android:text="Work published by the admin shows up here, and approved testimonials stay visible for customers."
+            android:layout_marginTop="8dp"
+            android:text="Recent cuts, beard work, and client-approved results from the studio."
             android:textColor="@color/brand_muted"
             android:textSize="14sp" />
 
@@ -55,15 +55,19 @@
             android:textSize="20sp"
             android:textStyle="bold" />
 
-        <com.google.android.material.button.MaterialButton
-            android:id="@+id/btnToggleTestimonials"
+        <TextView
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="12dp"
-            android:backgroundTint="@color/nav_selected_bg"
-            android:text="Show testimonials"
-            android:textAllCaps="false"
-            android:textColor="@android:color/white" />
+            android:layout_marginTop="6dp"
+            android:text="Filter by service and expand the list only when needed."
+            android:textColor="@color/brand_muted"
+            android:textSize="14sp" />
+
+        <Spinner
+            android:id="@+id/spinnerTestimonialFilter"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="12dp" />
 
         <LinearLayout
             android:id="@+id/llTestimonials"
@@ -71,7 +75,16 @@
             android:layout_height="wrap_content"
             android:layout_marginTop="12dp"
             android:animateLayoutChanges="true"
-            android:orientation="vertical"
+            android:orientation="vertical" />
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btnViewMoreTestimonials"
+            style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="12dp"
+            android:text="View more"
+            android:textAllCaps="false"
             android:visibility="gone" />
 
         <com.google.android.material.card.MaterialCardView

@@ -23,7 +23,7 @@ export default function BlogPage() {
         <div className="flex items-center justify-between gap-3">
           <div>
             <h1 className="text-3xl font-bold text-[#0f0a1e]">Beauty Blog</h1>
-            <p className="text-sm text-[#5a5872]">Every post below now comes from admin-managed backend content.</p>
+            <p className="text-sm text-[#5a5872]">Studio updates, grooming advice, and haircut inspiration from Brazdes.</p>
           </div>
           {role === 'admin' && (
             <Link

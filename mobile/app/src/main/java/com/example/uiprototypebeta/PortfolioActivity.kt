@@ -3,7 +3,6 @@ package com.example.uiprototypebeta
 import android.content.Intent
 import android.graphics.Typeface
 import android.os.Bundle
-import android.view.View
 import android.widget.ArrayAdapter
 import android.widget.ImageView
 import android.widget.LinearLayout
@@ -20,16 +19,19 @@ class PortfolioActivity : BaseDrawerActivity() {
 
     private lateinit var portfolioContainer: LinearLayout
     private lateinit var testimonialsContainer: LinearLayout
-    private lateinit var toggleTestimonialsButton: MaterialButton
+    private lateinit var viewMoreTestimonialsButton: MaterialButton
     private lateinit var manageButton: MaterialButton
     private lateinit var authorInput: TextInputEditText
     private lateinit var testimonialInput: TextInputEditText
     private lateinit var serviceSpinner: Spinner
+    private lateinit var testimonialFilterSpinner: Spinner
     private lateinit var ratingSpinner: Spinner
     private lateinit var submitButton: MaterialButton
     private lateinit var submitMessage: TextView
 
     private var services: List<ServiceOption> = emptyList()
+    private var allTestimonials: List<TestimonialEntry> = emptyList()
+    private var showAllTestimonials = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -39,29 +41,24 @@ class PortfolioActivity : BaseDrawerActivity() {
 
         portfolioContainer = findViewById(R.id.llPortfolioItems)
         testimonialsContainer = findViewById(R.id.llTestimonials)
-        toggleTestimonialsButton = findViewById(R.id.btnToggleTestimonials)
+        viewMoreTestimonialsButton = findViewById(R.id.btnViewMoreTestimonials)
         manageButton = findViewById(R.id.btnManagePortfolio)
         authorInput = findViewById(R.id.etAuthorName)
         testimonialInput = findViewById(R.id.etTestimonial)
         serviceSpinner = findViewById(R.id.spinnerServices)
+        testimonialFilterSpinner = findViewById(R.id.spinnerTestimonialFilter)
         ratingSpinner = findViewById(R.id.spinnerRating)
         submitButton = findViewById(R.id.btnSubmitTestimonial)
         submitMessage = findViewById(R.id.tvSubmitMessage)
 
         authorInput.setText(UserSession.displayName)
 
-        manageButton.visibility = if (AdminSession.isLoggedIn) View.VISIBLE else View.GONE
+        manageButton.visibility = if (AdminSession.isLoggedIn) android.view.View.VISIBLE else android.view.View.GONE
         manageButton.setOnClickListener {
             startActivity(Intent(this, WebAdminActivity::class.java).apply {
-                putExtra("title", "Portfolio and Reviews")
-                putExtra("path", "/admin/dashboard")
+                putExtra("title", "Portfolio and reviews")
+                putExtra("path", "/admin/dashboard/portfolio")
             })
-        }
-
-        toggleTestimonialsButton.setOnClickListener {
-            val showing = testimonialsContainer.visibility == View.VISIBLE
-            testimonialsContainer.visibility = if (showing) View.GONE else View.VISIBLE
-            toggleTestimonialsButton.text = if (showing) "Show testimonials" else "Hide testimonials"
         }
 
         ratingSpinner.adapter = ArrayAdapter(
@@ -70,6 +67,20 @@ class PortfolioActivity : BaseDrawerActivity() {
             listOf("5", "4", "3", "2", "1")
         )
 
+        testimonialFilterSpinner.onItemSelectedListener = object : android.widget.AdapterView.OnItemSelectedListener {
+            override fun onItemSelected(parent: android.widget.AdapterView<*>?, view: android.view.View?, position: Int, id: Long) {
+                showAllTestimonials = false
+                renderTestimonials()
+            }
+
+            override fun onNothingSelected(parent: android.widget.AdapterView<*>?) = Unit
+        }
+
+        viewMoreTestimonialsButton.setOnClickListener {
+            showAllTestimonials = !showAllTestimonials
+            renderTestimonials()
+        }
+
         submitButton.setOnClickListener { submitTestimonial() }
 
         loadContent()
@@ -77,7 +88,7 @@ class PortfolioActivity : BaseDrawerActivity() {
 
     override fun onResume() {
         super.onResume()
-        manageButton.visibility = if (AdminSession.isLoggedIn) View.VISIBLE else View.GONE
+        manageButton.visibility = if (AdminSession.isLoggedIn) android.view.View.VISIBLE else android.view.View.GONE
         if (authorInput.text.isNullOrBlank()) {
             authorInput.setText(UserSession.displayName)
         }
@@ -99,7 +110,10 @@ class PortfolioActivity : BaseDrawerActivity() {
         ApiClient.getTestimonials(
             onSuccess = { testimonialArray ->
                 val items = testimonialArray.toTestimonials()
-                runOnUiThread { renderTestimonials(items) }
+                runOnUiThread {
+                    allTestimonials = items
+                    renderTestimonials()
+                }
             },
             onError = { message ->
                 runOnUiThread {
@@ -118,6 +132,12 @@ class PortfolioActivity : BaseDrawerActivity() {
                         android.R.layout.simple_spinner_dropdown_item,
                         loadedServices.map { it.name }.ifEmpty { listOf("No services") }
                     )
+                    testimonialFilterSpinner.adapter = ArrayAdapter(
+                        this,
+                        android.R.layout.simple_spinner_dropdown_item,
+                        listOf("All services") + loadedServices.map { it.name }
+                    )
+                    renderTestimonials()
                 }
             },
             onError = { message ->
@@ -136,7 +156,7 @@ class PortfolioActivity : BaseDrawerActivity() {
         }
         items.forEach { item ->
             val card = MaterialCardView(this).apply {
-                radius = dp(20).toFloat()
+                radius = dp(24).toFloat()
                 setCardBackgroundColor(ContextCompat.getColor(context, android.R.color.white))
                 cardElevation = 0f
                 layoutParams = LinearLayout.LayoutParams(
@@ -148,7 +168,7 @@ class PortfolioActivity : BaseDrawerActivity() {
             val image = ImageView(this).apply {
                 layoutParams = LinearLayout.LayoutParams(
                     LinearLayout.LayoutParams.MATCH_PARENT,
-                    dp(190)
+                    dp(210)
                 )
                 scaleType = ImageView.ScaleType.CENTER_CROP
                 setBackgroundColor(ContextCompat.getColor(context, R.color.card_stroke))
@@ -172,6 +192,14 @@ class PortfolioActivity : BaseDrawerActivity() {
                 setTextSize(android.util.TypedValue.COMPLEX_UNIT_SP, 14f)
                 setPadding(0, dp(6), 0, 0)
             })
+            if (item.description.isNotBlank() && item.description != item.subtitle) {
+                body.addView(TextView(this).apply {
+                    text = item.description
+                    setTextColor(ContextCompat.getColor(context, R.color.brand_muted))
+                    setTextSize(android.util.TypedValue.COMPLEX_UNIT_SP, 13f)
+                    setPadding(0, dp(8), 0, 0)
+                })
+            }
             body.addView(TextView(this).apply {
                 text = item.tag.ifBlank { formatDateLabel(item.createdAt) }
                 setTextColor(ContextCompat.getColor(context, R.color.brand_text))
@@ -186,15 +214,29 @@ class PortfolioActivity : BaseDrawerActivity() {
         }
     }
 
-    private fun renderTestimonials(items: List<TestimonialEntry>) {
+    private fun renderTestimonials() {
         testimonialsContainer.removeAllViews()
-        if (items.isEmpty()) {
-            testimonialsContainer.addView(messageCard("No approved testimonials yet."))
+
+        val filterPosition = testimonialFilterSpinner.selectedItemPosition
+        val selectedServiceId = services.getOrNull(filterPosition - 1)?.id
+        val filtered = if (selectedServiceId == null) {
+            allTestimonials
+        } else {
+            val selectedServiceName = services.firstOrNull { it.id == selectedServiceId }?.name
+            allTestimonials.filter { it.serviceName == selectedServiceName }
+        }
+
+        val visible = if (showAllTestimonials) filtered else filtered.take(4)
+
+        if (filtered.isEmpty()) {
+            testimonialsContainer.addView(messageCard("No approved testimonials for this filter yet."))
+            viewMoreTestimonialsButton.visibility = android.view.View.GONE
             return
         }
-        items.forEach { item ->
+
+        visible.forEach { item ->
             val card = MaterialCardView(this).apply {
-                radius = dp(20).toFloat()
+                radius = dp(24).toFloat()
                 setCardBackgroundColor(ContextCompat.getColor(context, android.R.color.white))
                 cardElevation = 0f
                 layoutParams = LinearLayout.LayoutParams(
@@ -207,9 +249,9 @@ class PortfolioActivity : BaseDrawerActivity() {
                 setPadding(dp(18), dp(18), dp(18), dp(18))
             }
             body.addView(TextView(this).apply {
-                text = "Rating ${item.rating}/5"
-                setTextColor(ContextCompat.getColor(context, R.color.brand_muted))
-                setTextSize(android.util.TypedValue.COMPLEX_UNIT_SP, 12f)
+                text = "★".repeat(item.rating.coerceIn(1, 5)) + "  ${item.rating}/5"
+                setTextColor(ContextCompat.getColor(context, android.R.color.holo_orange_dark))
+                setTextSize(android.util.TypedValue.COMPLEX_UNIT_SP, 13f)
                 setTypeface(typeface, Typeface.BOLD)
             })
             body.addView(TextView(this).apply {
@@ -226,12 +268,19 @@ class PortfolioActivity : BaseDrawerActivity() {
                 setPadding(0, dp(14), 0, 0)
             })
             body.addView(TextView(this).apply {
-                text = item.serviceName.ifBlank { "Customer review" }
+                text = item.serviceName.ifBlank { "Client review" }
                 setTextColor(ContextCompat.getColor(context, R.color.brand_muted))
                 setTextSize(android.util.TypedValue.COMPLEX_UNIT_SP, 13f)
             })
             card.addView(body)
             testimonialsContainer.addView(card)
+        }
+
+        if (filtered.size > 4) {
+            viewMoreTestimonialsButton.visibility = android.view.View.VISIBLE
+            viewMoreTestimonialsButton.text = if (showAllTestimonials) "Show less" else "View more"
+        } else {
+            viewMoreTestimonialsButton.visibility = android.view.View.GONE
         }
     }
 
@@ -284,7 +333,7 @@ class PortfolioActivity : BaseDrawerActivity() {
 
     private fun messageCard(message: String): MaterialCardView {
         val card = MaterialCardView(this).apply {
-            radius = dp(18).toFloat()
+            radius = dp(20).toFloat()
             setCardBackgroundColor(ContextCompat.getColor(context, android.R.color.white))
             cardElevation = 0f
             layoutParams = LinearLayout.LayoutParams(

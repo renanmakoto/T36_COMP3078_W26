@@ -6,12 +6,13 @@ import { useSession } from '../../session-context';
 import { apiGetMyAppointments, apiCancelAppointment, type AppointmentData } from '../../api';
 
 export default function UserDashboardPage() {
-  const { role, displayName } = useSession();
+  const { isReady, role, displayName } = useSession();
   const router = useRouter();
   const [appointments, setAppointments] = useState<AppointmentData[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    if (!isReady) return;
     if (role === 'guest') {
       router.replace('/login');
       return;
@@ -20,7 +21,7 @@ export default function UserDashboardPage() {
       .then(setAppointments)
       .catch(() => {})
       .finally(() => setLoading(false));
-  }, [role, router]);
+  }, [isReady, role, router]);
 
   const handleCancel = useCallback(async (id: string) => {
     if (!window.confirm('Are you sure you want to cancel this appointment?')) return;
@@ -32,12 +33,10 @@ export default function UserDashboardPage() {
     }
   }, []);
 
-  if (role === 'guest') return null;
-
-  const now = new Date();
   const userName = displayName || 'Client';
 
   const { upcoming, past } = useMemo(() => {
+    const now = new Date();
     const upcomingArr: ViewModel[] = [];
     const pastArr: ViewModel[] = [];
 
@@ -48,18 +47,14 @@ export default function UserDashboardPage() {
         rawStart: start,
         dateLabel: formatDateTime(start),
         service: a.service.name,
-        price: `$${(a.service.price_cents / 100).toFixed(2)}`,
-        status:
-          a.status === 'CANCELLED'
-            ? 'Cancelled'
-            : start >= now
-              ? a.status === 'CONFIRMED'
-                ? 'Confirmed'
-                : 'Pending'
-              : 'Completed',
+        price: `$${(a.total_price_cents / 100).toFixed(2)}`,
+        status: formatAppointmentStatus(a, start, now),
         serviceId: a.service.id,
-        priceCents: a.service.price_cents,
-        durationMinutes: a.service.duration_minutes,
+        basePriceCents: a.service.price_cents,
+        totalPriceCents: a.total_price_cents,
+        durationMinutes: a.total_duration_minutes,
+        addOnIds: a.add_ons.map((item) => item.id),
+        addOnNames: a.add_ons.map((item) => item.name),
       };
       if (start >= now && a.status !== 'CANCELLED') upcomingArr.push(item);
       else pastArr.push(item);
@@ -69,16 +64,26 @@ export default function UserDashboardPage() {
     pastArr.sort((a, b) => b.rawStart.getTime() - a.rawStart.getTime());
 
     return { upcoming: upcomingArr, past: pastArr };
-  }, [appointments, now]);
+  }, [appointments]);
 
   const calendarDays = useMemo(() => buildCalendarDays(appointments), [appointments]);
 
   function handleReschedule(b: ViewModel) {
     if (!window.confirm('Do you want to reschedule this appointment?')) return;
-    router.push(
-      `/book/schedule?rescheduleId=${b.id}&serviceId=${b.serviceId}&title=${encodeURIComponent(b.service)}&price=${b.priceCents}&duration=${b.durationMinutes}`,
-    );
+    const params = new URLSearchParams({
+      rescheduleId: b.id,
+      serviceId: b.serviceId,
+      title: b.service,
+      basePrice: String(b.basePriceCents),
+      totalPrice: String(b.totalPriceCents),
+      duration: String(b.durationMinutes),
+      addOnIds: b.addOnIds.join(','),
+      addOnNames: b.addOnNames.join('|'),
+    });
+    router.push(`/book/schedule?${params.toString()}`);
   }
+
+  if (!isReady || role === 'guest') return null;
 
   if (loading) {
     return (
@@ -127,8 +132,8 @@ export default function UserDashboardPage() {
       </div>
 
       <div className="rounded-3xl bg-white p-6 shadow-sm">
-        <h2 className="text-xl font-semibold text-[#0f0a1e]">Calendar</h2>
-        <p className="text-sm text-[#5a5872]">Next 30 days of your bookings.</p>
+        <h2 className="text-xl font-semibold text-[#0f0a1e]">30-day booking view</h2>
+        <p className="text-sm text-[#5a5872]">Next 30 days of your bookings, grouped so busy days stay readable.</p>
         <UserCalendar days={calendarDays} />
       </div>
     </div>
@@ -143,8 +148,11 @@ type ViewModel = {
   price: string;
   status: string;
   serviceId: string;
-  priceCents: number;
+  basePriceCents: number;
+  totalPriceCents: number;
   durationMinutes: number;
+  addOnIds: string[];
+  addOnNames: string[];
 };
 
 function Card({ title, children }: { title: string; children: React.ReactNode }) {
@@ -199,9 +207,25 @@ function BookingRow({
 }
 
 function formatDateTime(date: Date) {
-  const datePart = new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric' }).format(date);
-  const timePart = new Intl.DateTimeFormat('en-US', { hour: 'numeric', minute: '2-digit' }).format(date);
+  const datePart = new Intl.DateTimeFormat('en-US', {
+    month: 'short',
+    day: 'numeric',
+    timeZone: 'America/Toronto',
+  }).format(date);
+  const timePart = new Intl.DateTimeFormat('en-US', {
+    hour: 'numeric',
+    minute: '2-digit',
+    timeZone: 'America/Toronto',
+  }).format(date);
   return `${datePart} - ${timePart}`;
+}
+
+function formatAppointmentStatus(appointment: AppointmentData, start: Date, now: Date) {
+  if (appointment.status === 'CANCELLED') return 'Cancelled';
+  if (appointment.status === 'NO_SHOW') return 'No-show';
+  if (appointment.status === 'CONFIRMED' && start < now) return 'Completed';
+  if (appointment.status === 'PENDING') return 'Pending';
+  return 'Confirmed';
 }
 
 type CalendarDay = {
@@ -233,20 +257,32 @@ function UserCalendar({ days }: { days: CalendarDay[] }) {
       {days.map((day) => (
         <div key={day.date.toISOString()} className="rounded-xl border border-[#e5e4ef] p-3">
           <p className="text-xs font-semibold uppercase tracking-wide text-[#7b7794]">
-            {new Intl.DateTimeFormat('en-US', { weekday: 'short', month: 'short', day: 'numeric' }).format(day.date)}
+            {new Intl.DateTimeFormat('en-US', {
+              weekday: 'short',
+              month: 'short',
+              day: 'numeric',
+              timeZone: 'America/Toronto',
+            }).format(day.date)}
           </p>
           {day.items.length === 0 ? (
             <p className="mt-2 text-xs text-[#b0afc4]">No bookings</p>
           ) : (
             <div className="mt-2 space-y-1">
-              {day.items.map((b) => (
+              {day.items.slice(0, 2).map((b) => (
                 <div key={b.id} className="rounded-lg bg-[#f1eefc] px-2 py-1">
                   <p className="text-xs font-semibold text-[#1a132f]">
-                    {new Intl.DateTimeFormat('en-US', { hour: 'numeric', minute: '2-digit' }).format(b.start)} &middot;{' '}
-                    {b.service}
+                    {new Intl.DateTimeFormat('en-US', {
+                      hour: 'numeric',
+                      minute: '2-digit',
+                      timeZone: 'America/Toronto',
+                    }).format(b.start)}{' '}
+                    &middot; {b.service}
                   </p>
                 </div>
               ))}
+              {day.items.length > 2 ? (
+                <p className="text-xs font-semibold text-[#7b7794]">+{day.items.length - 2} more booking(s)</p>
+              ) : null}
             </div>
           )}
         </div>

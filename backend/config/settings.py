@@ -15,12 +15,20 @@ from pathlib import Path
 
 import dj_database_url
 from django.core.exceptions import ImproperlyConfigured
-from dotenv import load_dotenv
+from dotenv import dotenv_values
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 
-load_dotenv(BASE_DIR / ".env")
+# Support both the documented `.env` file and the local `env` file in this repo.
+# Precedence is: process environment > local `env` > `.env`.
+dotenv_merged = {
+    **dotenv_values(BASE_DIR / ".env"),
+    **dotenv_values(BASE_DIR / "env"),
+}
+for _key, _value in dotenv_merged.items():
+    if _value is not None:
+        os.environ.setdefault(_key, _value)
 
 
 # Quick-start development settings - unsuitable for production
@@ -59,6 +67,7 @@ INSTALLED_APPS = [
     'django.contrib.admin',
     'django.contrib.auth',
     'django.contrib.contenttypes',
+    'django.contrib.postgres',
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
@@ -79,10 +88,14 @@ MIDDLEWARE = [
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
 ]
 
-CORS_ALLOWED_ORIGINS = [
-    "http://localhost:3000",
-    "http://127.0.0.1:3000",
+_configured_cors_origins = [
+    origin.strip()
+    for origin in os.getenv("CORS_ALLOWED_ORIGINS", "").split(",")
+    if origin.strip()
 ]
+CORS_ALLOWED_ORIGINS = sorted(
+    set(_configured_cors_origins).union({"http://localhost:3000", "http://127.0.0.1:3000"})
+)
 
 ROOT_URLCONF = 'config.urls'
 
@@ -167,6 +180,8 @@ USE_TZ = True
 STATIC_URL = 'static/'
 STATIC_ROOT = BASE_DIR / 'staticfiles'
 STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
+MEDIA_URL = os.getenv("MEDIA_URL", "/media/")
+MEDIA_ROOT = BASE_DIR / "media"
 
 # Default primary key field type
 # https://docs.djangoproject.com/en/5.2/ref/settings/#default-auto-field
@@ -186,4 +201,19 @@ from datetime import timedelta as _td  # noqa: E402
 SIMPLE_JWT = {
     'ACCESS_TOKEN_LIFETIME': _td(hours=1),
     'REFRESH_TOKEN_LIFETIME': _td(days=1),
+    'SIGNING_KEY': os.getenv("JWT_SECRET_KEY", SECRET_KEY),
 }
+
+FRONTEND_BASE_URL = os.getenv("FRONTEND_BASE_URL", "http://127.0.0.1:3000").rstrip("/")
+BUSINESS_NAME = os.getenv("BUSINESS_NAME", "BrazWebDes Hairstylist Booking")
+BUSINESS_ADDRESS = os.getenv("BUSINESS_ADDRESS", "Toronto, ON")
+BUSINESS_PHONE = os.getenv("BUSINESS_PHONE", "")
+BOOKING_REPLY_TO = os.getenv("BOOKING_REPLY_TO", "").strip()
+RESEND_API_KEY = os.getenv("RESEND_API_KEY", "").strip()
+RESEND_FROM_EMAIL = os.getenv("RESEND_FROM_EMAIL", "").strip()
+RESEND_OWNER_EMAIL = os.getenv("RESEND_OWNER_EMAIL", "").strip()
+RESEND_WEBHOOK_SECRET = os.getenv("RESEND_WEBHOOK_SECRET", "").strip()
+BOOKING_EMAILS_ENABLED = _env_bool(
+    os.getenv("BOOKING_EMAILS_ENABLED"),
+    bool(RESEND_API_KEY and RESEND_FROM_EMAIL and RESEND_OWNER_EMAIL),
+)

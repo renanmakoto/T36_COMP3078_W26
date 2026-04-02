@@ -7,12 +7,14 @@ import {
   apiCreateAdminBlogPost,
   apiGetAdminBlogPosts,
   apiUpdateAdminBlogPost,
+  apiUploadAdminImage,
   type AdminBlogPostData,
 } from '../../../api';
 import {
   AdminPageHeader,
   EditableRow,
   Field,
+  ImageUploadField,
   NoticeBanner,
   Toggle,
   inputClass,
@@ -48,7 +50,7 @@ const initialForm: BlogFormState = {
 };
 
 export default function AdminBlogPage() {
-  const { role } = useSession();
+  const { isReady, role } = useSession();
   const router = useRouter();
   const [posts, setPosts] = useState<AdminBlogPostData[]>([]);
   const [form, setForm] = useState<BlogFormState>(initialForm);
@@ -57,15 +59,17 @@ export default function AdminBlogPage() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
+  const [imageUploading, setImageUploading] = useState(false);
 
   useEffect(() => {
+    if (!isReady) return;
     if (role !== 'admin') {
       router.replace('/login');
       return;
     }
 
     loadData();
-  }, [role, router]);
+  }, [isReady, role, router]);
 
   async function loadData() {
     setLoading(true);
@@ -110,6 +114,13 @@ export default function AdminBlogPage() {
     setForm(initialForm);
   }
 
+  async function handleImageUpload(file: File, kind: 'service' | 'portfolio' | 'blog' | 'misc') {
+    const response = await apiUploadAdminImage(file, kind);
+    setNotice('Image uploaded successfully.');
+    setError('');
+    return response.url;
+  }
+
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setSaving(true);
@@ -145,7 +156,7 @@ export default function AdminBlogPage() {
     }
   }
 
-  if (role !== 'admin') return null;
+  if (!isReady || role !== 'admin') return null;
 
   return (
     <div className="space-y-6">
@@ -176,13 +187,15 @@ export default function AdminBlogPage() {
                   className={inputClass}
                 />
               </Field>
-              <Field label="Cover image URL">
-                <input
-                  value={form.cover_image_url}
-                  onChange={(event) => setForm((current) => ({ ...current, cover_image_url: event.target.value }))}
-                  className={inputClass}
-                />
-              </Field>
+              <ImageUploadField
+                label="Cover image"
+                hint="Paste a URL or upload from your device"
+                kind="blog"
+                value={form.cover_image_url}
+                onChange={(value) => setForm((current) => ({ ...current, cover_image_url: value }))}
+                onUpload={handleImageUpload}
+                onUploadingChange={setImageUploading}
+              />
             </div>
             <Field label="Excerpt">
               <textarea
@@ -229,8 +242,8 @@ export default function AdminBlogPage() {
               </div>
             </div>
             <div className="flex flex-wrap gap-3">
-              <button type="submit" className={primaryButtonClass} disabled={saving}>
-                {saving ? 'Saving...' : editingId ? 'Save post' : 'Create post'}
+              <button type="submit" className={primaryButtonClass} disabled={saving || imageUploading}>
+                {imageUploading ? 'Uploading image...' : saving ? 'Saving...' : editingId ? 'Save post' : 'Create post'}
               </button>
               {editingId ? (
                 <button type="button" onClick={resetForm} className={secondaryButtonClass}>

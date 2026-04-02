@@ -11,9 +11,26 @@ import {
   apiGetAdminServices,
   apiUpdateAdminAddOn,
   apiUpdateAdminService,
+  apiUploadAdminImage,
   type AdminAddOnData,
   type AdminServiceData,
 } from '../../../api';
+import {
+  AdminPageHeader,
+  EditableRow,
+  Field,
+  ImageUploadField,
+  NoticeBanner,
+  Toggle,
+  centsToDollars,
+  dollarsToCents,
+  formatCurrency,
+  inputClass,
+  panelClass,
+  primaryButtonClass,
+  secondaryButtonClass,
+  textAreaClass,
+} from '../admin-ui';
 
 type ServiceFormState = {
   name: string;
@@ -46,7 +63,7 @@ const initialServiceForm: ServiceFormState = {
   image_url: '',
   payment_note: '',
   duration_minutes: '45',
-  price_dollars: '50.85',
+  price_dollars: '50.00',
   sort_order: '0',
   is_featured_home: false,
   home_order: '0',
@@ -66,7 +83,7 @@ const initialAddOnForm: AddOnFormState = {
 };
 
 export default function AdminServicesPage() {
-  const { role } = useSession();
+  const { isReady, role } = useSession();
   const router = useRouter();
   const [services, setServices] = useState<AdminServiceData[]>([]);
   const [addOns, setAddOns] = useState<AdminAddOnData[]>([]);
@@ -77,14 +94,16 @@ export default function AdminServicesPage() {
   const [editingAddOnId, setEditingAddOnId] = useState<string | null>(null);
   const [serviceForm, setServiceForm] = useState<ServiceFormState>(initialServiceForm);
   const [addOnForm, setAddOnForm] = useState<AddOnFormState>(initialAddOnForm);
+  const [serviceImageUploading, setServiceImageUploading] = useState(false);
 
   useEffect(() => {
+    if (!isReady) return;
     if (role !== 'admin') {
       router.replace('/login');
       return;
     }
     loadData();
-  }, [role, router]);
+  }, [isReady, role, router]);
 
   async function loadData() {
     setLoading(true);
@@ -139,6 +158,13 @@ export default function AdminServicesPage() {
       is_active: item.is_active,
       service_ids: item.services.map((service) => service.id),
     });
+  }
+
+  async function handleImageUpload(file: File, kind: 'service' | 'portfolio' | 'blog' | 'misc') {
+    const response = await apiUploadAdminImage(file, kind);
+    setNotice('Image uploaded successfully.');
+    setError('');
+    return response.url;
   }
 
   async function submitService(event: FormEvent) {
@@ -204,7 +230,7 @@ export default function AdminServicesPage() {
     }
   }
 
-  if (role !== 'admin') return null;
+  if (!isReady || role !== 'admin') return null;
 
   if (loading) {
     return (
@@ -216,55 +242,93 @@ export default function AdminServicesPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h1 className="text-3xl font-bold text-[#0f0a1e]">Manage Services</h1>
-          <p className="text-sm text-[#5a5872]">Control services, add-ons, pricing, duration, images, and home page visibility.</p>
-        </div>
-        <Link href="/admin/dashboard" className="rounded-full border border-[#e3e3e3] px-4 py-2 text-sm font-semibold text-[#1a132f] hover:bg-[#f6f6f6]">
-          Back to dashboard
-        </Link>
-      </div>
+      <AdminPageHeader
+        title="Services and Add-ons"
+        description="Set pricing, durations, featured cards, optional extras, and upload service images directly from your device."
+      />
 
-      {(notice || error) && (
-        <div className={`rounded-2xl p-4 text-sm font-semibold ${error ? 'bg-red-50 text-red-700' : 'bg-green-50 text-green-700'}`}>
-          {error || notice}
-        </div>
-      )}
+      <NoticeBanner error={error} notice={notice} />
 
       <div className="grid gap-6 xl:grid-cols-2">
-        <section className="rounded-[2rem] bg-white p-6 shadow-sm md:p-8">
+        <section className={panelClass}>
           <h2 className="text-2xl font-bold text-[#0f0a1e]">{editingServiceId ? 'Edit service' : 'Create service'}</h2>
           <form onSubmit={submitService} className="mt-5 space-y-4">
-            <Field label="Title">
-              <input value={serviceForm.name} onChange={(event) => setServiceForm((prev) => ({ ...prev, name: event.target.value }))} className={inputClass} required />
+            <Field label="Service name">
+              <input
+                value={serviceForm.name}
+                onChange={(event) => setServiceForm((prev) => ({ ...prev, name: event.target.value }))}
+                className={inputClass}
+                required
+              />
             </Field>
             <Field label="Description">
-              <textarea value={serviceForm.description} onChange={(event) => setServiceForm((prev) => ({ ...prev, description: event.target.value }))} className={`${inputClass} min-h-[120px]`} />
+              <textarea
+                value={serviceForm.description}
+                onChange={(event) => setServiceForm((prev) => ({ ...prev, description: event.target.value }))}
+                className={textAreaClass}
+              />
             </Field>
-            <Field label="Image URL">
-              <input value={serviceForm.image_url} onChange={(event) => setServiceForm((prev) => ({ ...prev, image_url: event.target.value }))} className={inputClass} />
-            </Field>
+            <ImageUploadField
+              label="Service image"
+              hint="Paste a URL or upload from this device"
+              kind="service"
+              value={serviceForm.image_url}
+              onChange={(value) => setServiceForm((prev) => ({ ...prev, image_url: value }))}
+              onUpload={handleImageUpload}
+              onUploadingChange={setServiceImageUploading}
+            />
             <Field label="Payment note">
-              <textarea value={serviceForm.payment_note} onChange={(event) => setServiceForm((prev) => ({ ...prev, payment_note: event.target.value }))} className={`${inputClass} min-h-[90px]`} />
+              <textarea
+                value={serviceForm.payment_note}
+                onChange={(event) => setServiceForm((prev) => ({ ...prev, payment_note: event.target.value }))}
+                className={`${textAreaClass} min-h-[90px]`}
+              />
             </Field>
             <div className="grid gap-4 md:grid-cols-3">
               <Field label="Price (CAD)">
-                <input value={serviceForm.price_dollars} onChange={(event) => setServiceForm((prev) => ({ ...prev, price_dollars: event.target.value }))} className={inputClass} required />
+                <input
+                  value={serviceForm.price_dollars}
+                  onChange={(event) => setServiceForm((prev) => ({ ...prev, price_dollars: event.target.value }))}
+                  className={inputClass}
+                  required
+                />
               </Field>
               <Field label="Duration (min)">
-                <input value={serviceForm.duration_minutes} onChange={(event) => setServiceForm((prev) => ({ ...prev, duration_minutes: event.target.value }))} className={inputClass} required />
+                <input
+                  value={serviceForm.duration_minutes}
+                  onChange={(event) => setServiceForm((prev) => ({ ...prev, duration_minutes: event.target.value }))}
+                  className={inputClass}
+                  required
+                />
               </Field>
               <Field label="Sort order">
-                <input value={serviceForm.sort_order} onChange={(event) => setServiceForm((prev) => ({ ...prev, sort_order: event.target.value }))} className={inputClass} required />
+                <input
+                  value={serviceForm.sort_order}
+                  onChange={(event) => setServiceForm((prev) => ({ ...prev, sort_order: event.target.value }))}
+                  className={inputClass}
+                  required
+                />
               </Field>
             </div>
             <div className="grid gap-4 md:grid-cols-3">
               <Field label="Home order">
-                <input value={serviceForm.home_order} onChange={(event) => setServiceForm((prev) => ({ ...prev, home_order: event.target.value }))} className={inputClass} required />
+                <input
+                  value={serviceForm.home_order}
+                  onChange={(event) => setServiceForm((prev) => ({ ...prev, home_order: event.target.value }))}
+                  className={inputClass}
+                  required
+                />
               </Field>
-              <Toggle label="Active" checked={serviceForm.is_active} onChange={(checked) => setServiceForm((prev) => ({ ...prev, is_active: checked }))} />
-              <Toggle label="Featured on home" checked={serviceForm.is_featured_home} onChange={(checked) => setServiceForm((prev) => ({ ...prev, is_featured_home: checked }))} />
+              <Toggle
+                label="Active"
+                checked={serviceForm.is_active}
+                onChange={(checked) => setServiceForm((prev) => ({ ...prev, is_active: checked }))}
+              />
+              <Toggle
+                label="Featured on home"
+                checked={serviceForm.is_featured_home}
+                onChange={(checked) => setServiceForm((prev) => ({ ...prev, is_featured_home: checked }))}
+              />
             </div>
 
             <div className="space-y-3 rounded-2xl border border-[#ecebf5] bg-[#fcfcff] p-4">
@@ -287,7 +351,9 @@ export default function AdminServicesPage() {
                     />
                     <div>
                       <p className="text-sm font-semibold text-[#0f0a1e]">{addOn.name}</p>
-                      <p className="text-xs text-[#5a5872]">+${(addOn.price_cents / 100).toFixed(2)} · +{addOn.duration_minutes} min</p>
+                      <p className="text-xs text-[#5a5872]">
+                        +{formatCurrency(addOn.price_cents)} / +{addOn.duration_minutes} min
+                      </p>
                     </div>
                   </label>
                 ))}
@@ -295,55 +361,99 @@ export default function AdminServicesPage() {
             </div>
 
             <div className="flex flex-wrap gap-3">
-              <button className="rounded-xl bg-[#1a132f] px-4 py-3 text-sm font-semibold text-white hover:brightness-110">
-                {editingServiceId ? 'Save service' : 'Create service'}
+              <button className={primaryButtonClass} disabled={serviceImageUploading}>
+                {serviceImageUploading ? 'Uploading image...' : editingServiceId ? 'Save service' : 'Create service'}
               </button>
-              {editingServiceId && (
-                <button type="button" onClick={resetServiceForm} className="rounded-xl border border-[#e3e3e3] px-4 py-3 text-sm font-semibold text-[#1a132f] hover:bg-[#f6f6f6]">
+              {editingServiceId ? (
+                <button type="button" onClick={resetServiceForm} className={secondaryButtonClass}>
                   Cancel edit
                 </button>
-              )}
+              ) : null}
             </div>
           </form>
 
           <div className="mt-6 space-y-3">
             {services.map((service) => (
-              <ListRow
+              <EditableRow
                 key={service.id}
                 title={service.name}
-                subtitle={`${service.duration_minutes} min · $${(service.price_cents / 100).toFixed(2)} · ${service.available_add_ons.length} add-ons`}
+                subtitle={`${service.duration_minutes} min / ${formatCurrency(service.price_cents)} / ${
+                  service.available_add_ons.length
+                } add-ons`}
                 meta={service.is_featured_home ? 'Featured on home' : service.is_active ? 'Active' : 'Hidden'}
                 onEdit={() => editService(service)}
-              />
+              >
+                {service.image_url ? (
+                  <Link
+                    href={service.image_url}
+                    target="_blank"
+                    className="rounded-full border border-[#ecebf5] px-3 py-1 text-xs font-medium text-[#1a132f]"
+                  >
+                    Preview image
+                  </Link>
+                ) : null}
+              </EditableRow>
             ))}
           </div>
         </section>
 
-        <section className="rounded-[2rem] bg-white p-6 shadow-sm md:p-8">
+        <section className={panelClass}>
           <h2 className="text-2xl font-bold text-[#0f0a1e]">{editingAddOnId ? 'Edit add-on' : 'Create add-on'}</h2>
           <form onSubmit={submitAddOn} className="mt-5 space-y-4">
-            <Field label="Title">
-              <input value={addOnForm.name} onChange={(event) => setAddOnForm((prev) => ({ ...prev, name: event.target.value }))} className={inputClass} required />
+            <Field label="Add-on name">
+              <input
+                value={addOnForm.name}
+                onChange={(event) => setAddOnForm((prev) => ({ ...prev, name: event.target.value }))}
+                className={inputClass}
+                required
+              />
             </Field>
             <Field label="Description">
-              <textarea value={addOnForm.description} onChange={(event) => setAddOnForm((prev) => ({ ...prev, description: event.target.value }))} className={`${inputClass} min-h-[120px]`} />
+              <textarea
+                value={addOnForm.description}
+                onChange={(event) => setAddOnForm((prev) => ({ ...prev, description: event.target.value }))}
+                className={textAreaClass}
+              />
             </Field>
             <div className="grid gap-4 md:grid-cols-3">
               <Field label="Category">
-                <input value={addOnForm.category} onChange={(event) => setAddOnForm((prev) => ({ ...prev, category: event.target.value }))} className={inputClass} />
+                <input
+                  value={addOnForm.category}
+                  onChange={(event) => setAddOnForm((prev) => ({ ...prev, category: event.target.value }))}
+                  className={inputClass}
+                />
               </Field>
               <Field label="Price (CAD)">
-                <input value={addOnForm.price_dollars} onChange={(event) => setAddOnForm((prev) => ({ ...prev, price_dollars: event.target.value }))} className={inputClass} required />
+                <input
+                  value={addOnForm.price_dollars}
+                  onChange={(event) => setAddOnForm((prev) => ({ ...prev, price_dollars: event.target.value }))}
+                  className={inputClass}
+                  required
+                />
               </Field>
               <Field label="Duration (min)">
-                <input value={addOnForm.duration_minutes} onChange={(event) => setAddOnForm((prev) => ({ ...prev, duration_minutes: event.target.value }))} className={inputClass} required />
+                <input
+                  value={addOnForm.duration_minutes}
+                  onChange={(event) => setAddOnForm((prev) => ({ ...prev, duration_minutes: event.target.value }))}
+                  className={inputClass}
+                  required
+                />
               </Field>
             </div>
             <div className="grid gap-4 md:grid-cols-2">
               <Field label="Sort order">
-                <input value={addOnForm.sort_order} onChange={(event) => setAddOnForm((prev) => ({ ...prev, sort_order: event.target.value }))} className={inputClass} required />
+                <input
+                  value={addOnForm.sort_order}
+                  onChange={(event) => setAddOnForm((prev) => ({ ...prev, sort_order: event.target.value }))}
+                  className={inputClass}
+                  required
+                />
               </Field>
-              <Toggle label="Active" checked={addOnForm.is_active} onChange={(checked) => setAddOnForm((prev) => ({ ...prev, is_active: checked }))} />
+              <Toggle
+                label="Active"
+                checked={addOnForm.is_active}
+                onChange={(checked) => setAddOnForm((prev) => ({ ...prev, is_active: checked }))}
+              />
             </div>
 
             <div className="space-y-3 rounded-2xl border border-[#ecebf5] bg-[#fcfcff] p-4">
@@ -374,24 +484,24 @@ export default function AdminServicesPage() {
             </div>
 
             <div className="flex flex-wrap gap-3">
-              <button className="rounded-xl bg-[#1a132f] px-4 py-3 text-sm font-semibold text-white hover:brightness-110">
-                {editingAddOnId ? 'Save add-on' : 'Create add-on'}
-              </button>
-              {editingAddOnId && (
-                <button type="button" onClick={resetAddOnForm} className="rounded-xl border border-[#e3e3e3] px-4 py-3 text-sm font-semibold text-[#1a132f] hover:bg-[#f6f6f6]">
+              <button className={primaryButtonClass}>{editingAddOnId ? 'Save add-on' : 'Create add-on'}</button>
+              {editingAddOnId ? (
+                <button type="button" onClick={resetAddOnForm} className={secondaryButtonClass}>
                   Cancel edit
                 </button>
-              )}
+              ) : null}
             </div>
           </form>
 
           <div className="mt-6 space-y-3">
             {addOns.map((addOn) => (
-              <ListRow
+              <EditableRow
                 key={addOn.id}
                 title={addOn.name}
-                subtitle={`${addOn.category || 'Add-on'} · +$${(addOn.price_cents / 100).toFixed(2)} · +${addOn.duration_minutes} min`}
-                meta={`${addOn.services.length} services`}
+                subtitle={`${addOn.category || 'Add-on'} / +${formatCurrency(addOn.price_cents)} / +${
+                  addOn.duration_minutes
+                } min`}
+                meta={`${addOn.services.length} linked services`}
                 onEdit={() => editAddOn(addOn)}
               />
             ))}
@@ -401,57 +511,3 @@ export default function AdminServicesPage() {
     </div>
   );
 }
-
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
-  return (
-    <label className="block">
-      <span className="text-sm font-semibold text-[#1a132f]">{label}</span>
-      <div className="mt-1">{children}</div>
-    </label>
-  );
-}
-
-function Toggle({ label, checked, onChange }: { label: string; checked: boolean; onChange: (checked: boolean) => void }) {
-  return (
-    <label className="flex items-center gap-3 rounded-xl border border-[#ecebf5] bg-[#fcfcff] px-3 py-3 text-sm font-semibold text-[#1a132f]">
-      <input type="checkbox" checked={checked} onChange={(event) => onChange(event.target.checked)} className="h-4 w-4 accent-[#1a132f]" />
-      {label}
-    </label>
-  );
-}
-
-function ListRow({
-  title,
-  subtitle,
-  meta,
-  onEdit,
-}: {
-  title: string;
-  subtitle: string;
-  meta: string;
-  onEdit: () => void;
-}) {
-  return (
-    <div className="flex flex-wrap items-center justify-between gap-4 rounded-2xl border border-[#ecebf5] bg-[#fcfcff] p-4">
-      <div>
-        <p className="font-semibold text-[#0f0a1e]">{title}</p>
-        <p className="text-sm text-[#5a5872]">{subtitle}</p>
-        <p className="text-xs uppercase tracking-[0.16em] text-[#7b7794]">{meta}</p>
-      </div>
-      <button onClick={onEdit} className="rounded-full border border-[#e3e3e3] px-3 py-1 text-xs font-medium text-[#1a132f] hover:bg-[#f6f6f6]">
-        Edit
-      </button>
-    </div>
-  );
-}
-
-function centsToDollars(cents: number) {
-  return (cents / 100).toFixed(2);
-}
-
-function dollarsToCents(value: string) {
-  return Math.round(Number.parseFloat(value || '0') * 100);
-}
-
-const inputClass =
-  'w-full rounded-xl border border-[#e5e4ef] bg-white px-3 py-3 text-sm outline-none ring-[#5b4fe5]/40 focus:ring-2';

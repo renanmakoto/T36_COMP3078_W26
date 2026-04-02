@@ -1,11 +1,26 @@
 'use client';
 
-import { FormEvent, useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { FormEvent, Suspense, useState } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { apiRegister } from '../api';
 
 export default function SignUpPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="mx-auto max-w-xl rounded-3xl bg-white p-8 shadow-sm">
+          <p className="text-sm text-[#5a5872]">Loading sign-up...</p>
+        </div>
+      }
+    >
+      <SignUpContent />
+    </Suspense>
+  );
+}
+
+function SignUpContent() {
   const router = useRouter();
+  const search = useSearchParams();
   const [displayName, setDisplayName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -18,7 +33,8 @@ export default function SignUpPage() {
     setLoading(true);
     try {
       await apiRegister(email, password, displayName);
-      router.push('/login');
+      const next = search.get('next');
+      router.push(next ? `/login?next=${encodeURIComponent(next)}` : '/login');
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Registration failed.');
     } finally {
@@ -30,7 +46,8 @@ export default function SignUpPage() {
     <div className="mx-auto max-w-xl space-y-6 rounded-3xl bg-white p-8 shadow-sm">
       <h1 className="text-3xl font-bold text-[#0f0a1e]">Create account</h1>
       <p className="text-sm text-[#5a5872]">
-        Sign up with your email to start booking appointments. Admin accounts are added manually and cannot be self-registered.
+        Sign up with your email to start booking appointments. Admin accounts are added manually and cannot be
+        self-registered.
       </p>
 
       <form onSubmit={handleSubmit} className="space-y-4">
@@ -70,7 +87,7 @@ export default function SignUpPage() {
         <button
           type="submit"
           disabled={loading}
-          className="w-full rounded-xl bg-[#1a132f] px-4 py-3 text-white font-semibold shadow-sm hover:brightness-110 disabled:opacity-60"
+          className="w-full rounded-xl bg-[#1a132f] px-4 py-3 font-semibold text-white shadow-sm hover:brightness-110 disabled:opacity-60"
         >
           {loading ? 'Creating account...' : 'Create account'}
         </button>

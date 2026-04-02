@@ -8,6 +8,7 @@ from .views import (
     AdminAppointmentUpdateView,
     AdminBlogPostDetailView,
     AdminBlogPostListCreateView,
+    AdminImageUploadView,
     AdminPortfolioItemDetailView,
     AdminPortfolioItemListCreateView,
     AdminServiceDetailView,
@@ -16,9 +17,13 @@ from .views import (
     AdminTestimonialListCreateView,
     AnalyticsBookingsPerDayView,
     AnalyticsBookingsPerMonthView,
+    AnalyticsOverviewView,
     AnalyticsNoShowRateView,
     AnalyticsTopServicesView,
     AppointmentListCreateView,
+    BookingEmailCancelView,
+    BookingEmailLinkView,
+    BookingEmailRescheduleView,
     AppointmentUpdateView,
     AvailabilityView,
     BlogPostDetailView,
@@ -27,6 +32,7 @@ from .views import (
     LoginView,
     PortfolioItemListView,
     RegisterView,
+    ResendWebhookView,
     ServiceListView,
     TestimonialListCreateView,
 )
@@ -43,6 +49,10 @@ urlpatterns = [
     path("blog-posts/<slug:slug>", BlogPostDetailView.as_view(), name="blog-post-detail"),
     path("testimonials", TestimonialListCreateView.as_view(), name="testimonials"),
     path("availability", AvailabilityView.as_view(), name="availability"),
+    path("webhooks/resend", ResendWebhookView.as_view(), name="resend-webhook"),
+    path("booking-links/resolve", BookingEmailLinkView.as_view(), name="booking-link-resolve"),
+    path("booking-links/cancel", BookingEmailCancelView.as_view(), name="booking-link-cancel"),
+    path("booking-links/reschedule", BookingEmailRescheduleView.as_view(), name="booking-link-reschedule"),
 
     path("appointments", AppointmentListCreateView.as_view(), name="appointments"),
     path(
@@ -58,6 +68,7 @@ urlpatterns = [
         name="admin-service-detail",
     ),
     path("admin/add-ons", AdminAddOnListCreateView.as_view(), name="admin-add-ons"),
+    path("admin/uploads/image", AdminImageUploadView.as_view(), name="admin-image-upload"),
     path(
         "admin/add-ons/<uuid:pk>",
         AdminAddOnDetailView.as_view(),
@@ -104,6 +115,11 @@ urlpatterns = [
         name="admin-appointment-update",
     ),
 
+    path(
+        "admin/analytics/overview",
+        AnalyticsOverviewView.as_view(),
+        name="analytics-overview",
+    ),
     path(
         "admin/analytics/bookings-per-day",
         AnalyticsBookingsPerDayView.as_view(),

@@ -3,6 +3,8 @@ import { Space_Grotesk } from 'next/font/google';
 import './globals.css';
 import { SessionProvider } from './session-context';
 import { Header } from './components/Header';
+import { FrameSync } from './components/FrameSync';
+import { siteConfig } from './site-config';
 
 const spaceGrotesk = Space_Grotesk({
   variable: '--font-grotesk',
@@ -11,8 +13,8 @@ const spaceGrotesk = Space_Grotesk({
 });
 
 export const metadata: Metadata = {
-  title: 'Hairstylist Booking · BrazWebDes',
-  description: 'UI web prototype for the capstone booking application',
+  title: `${siteConfig.studioName} | ${siteConfig.brandName}`,
+  description: 'Online booking, portfolio, reviews, and admin management for the Brazdes barber experience.',
 };
 
 export default function RootLayout({
@@ -26,6 +28,7 @@ export default function RootLayout({
         <SessionProvider>
           <Header />
           <main className="mx-auto max-w-6xl px-4 pb-16 pt-8 sm:px-6">{children}</main>
+          <FrameSync />
         </SessionProvider>
       </body>
     </html>

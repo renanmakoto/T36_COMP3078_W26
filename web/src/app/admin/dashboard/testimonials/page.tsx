@@ -4,7 +4,6 @@ import { type FormEvent, useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useSession } from '../../../session-context';
 import {
-  apiCreateAdminTestimonial,
   apiGetAdminServices,
   apiGetAdminTestimonials,
   apiUpdateAdminTestimonial,
@@ -37,7 +36,7 @@ type TestimonialFormState = {
   home_order: string;
 };
 
-const initialForm: TestimonialFormState = {
+const emptyForm: TestimonialFormState = {
   author_name: '',
   author_email: '',
   quote: '',
@@ -50,11 +49,11 @@ const initialForm: TestimonialFormState = {
 };
 
 export default function AdminTestimonialsPage() {
-  const { role } = useSession();
+  const { isReady, role } = useSession();
   const router = useRouter();
   const [services, setServices] = useState<AdminServiceData[]>([]);
   const [testimonials, setTestimonials] = useState<AdminTestimonialData[]>([]);
-  const [form, setForm] = useState<TestimonialFormState>(initialForm);
+  const [form, setForm] = useState<TestimonialFormState>(emptyForm);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -62,6 +61,7 @@ export default function AdminTestimonialsPage() {
   const [notice, setNotice] = useState('');
 
   useEffect(() => {
+    if (!isReady) return;
     if (role !== 'admin') {
       router.replace('/login');
       return;
@@ -71,10 +71,7 @@ export default function AdminTestimonialsPage() {
       setLoading(true);
       setError('');
       try {
-        const [testimonialItems, serviceItems] = await Promise.all([
-          apiGetAdminTestimonials(),
-          apiGetAdminServices(),
-        ]);
+        const [testimonialItems, serviceItems] = await Promise.all([apiGetAdminTestimonials(), apiGetAdminServices()]);
         setTestimonials(testimonialItems);
         setServices(serviceItems);
       } catch (err: unknown) {
@@ -85,7 +82,7 @@ export default function AdminTestimonialsPage() {
     }
 
     loadData();
-  }, [role, router]);
+  }, [isReady, role, router]);
 
   const sortedTestimonials = useMemo(
     () =>
@@ -104,9 +101,9 @@ export default function AdminTestimonialsPage() {
     setTestimonials(data);
   }
 
-  function resetForm() {
+  function resetEdit() {
     setEditingId(null);
-    setForm(initialForm);
+    setForm(emptyForm);
   }
 
   function startEdit(item: AdminTestimonialData) {
@@ -126,31 +123,26 @@ export default function AdminTestimonialsPage() {
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (!editingId) return;
+
     setSaving(true);
     setError('');
     setNotice('');
 
-    const payload = {
-      author_name: form.author_name,
-      author_email: form.author_email,
-      quote: form.quote,
-      rating: Number(form.rating),
-      service_id: form.service_id || null,
-      status: form.status,
-      admin_notes: form.admin_notes,
-      is_featured_home: form.is_featured_home,
-      home_order: Number(form.home_order),
-    };
-
     try {
-      if (editingId) {
-        await apiUpdateAdminTestimonial(editingId, payload);
-        setNotice('Testimonial updated.');
-      } else {
-        await apiCreateAdminTestimonial(payload);
-        setNotice('Testimonial created.');
-      }
-      resetForm();
+      await apiUpdateAdminTestimonial(editingId, {
+        author_name: form.author_name,
+        author_email: form.author_email,
+        quote: form.quote,
+        rating: Number(form.rating),
+        service_id: form.service_id || null,
+        status: form.status,
+        admin_notes: form.admin_notes,
+        is_featured_home: form.is_featured_home,
+        home_order: Number(form.home_order),
+      });
+      setNotice('Testimonial updated.');
+      resetEdit();
       await refreshTestimonials();
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Failed to save testimonial.');
@@ -165,28 +157,38 @@ export default function AdminTestimonialsPage() {
     try {
       await apiUpdateAdminTestimonial(id, { status });
       setNotice(`Testimonial ${status === 'APPROVED' ? 'approved' : 'rejected'}.`);
+      if (editingId === id) {
+        resetEdit();
+      }
       await refreshTestimonials();
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Failed to update testimonial.');
     }
   }
 
-  if (role !== 'admin') return null;
+  if (!isReady || role !== 'admin') return null;
 
   return (
     <div className="space-y-6">
       <AdminPageHeader
-        title="Moderate Testimonials"
-        description="Customer reviews are submitted publicly but only approved testimonials appear in the portfolio and home page."
+        title="Reviews"
+        description="Moderate the review queue, approve what should go live, and edit only the testimonials that need attention."
       />
 
       <NoticeBanner error={error} notice={notice} />
 
-      <div className="grid gap-6 xl:grid-cols-[0.95fr,1.2fr]">
+      {editingId ? (
         <section className={panelClass}>
-          <h2 className="text-2xl font-bold text-[#0f0a1e]">
-            {editingId ? 'Edit testimonial' : 'Create manual testimonial'}
-          </h2>
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <h2 className="text-2xl font-bold text-[#0f0a1e]">Edit testimonial</h2>
+              <p className="text-sm text-[#5a5872]">Update the selected review without exposing a manual create form.</p>
+            </div>
+            <button type="button" onClick={resetEdit} className={secondaryButtonClass}>
+              Close editor
+            </button>
+          </div>
+
           <form onSubmit={handleSubmit} className="mt-5 space-y-4">
             <div className="grid gap-4 md:grid-cols-2">
               <Field label="Author name">
@@ -207,6 +209,7 @@ export default function AdminTestimonialsPage() {
                 />
               </Field>
             </div>
+
             <div className="grid gap-4 md:grid-cols-3">
               <Field label="Related service">
                 <select
@@ -252,6 +255,7 @@ export default function AdminTestimonialsPage() {
                 </select>
               </Field>
             </div>
+
             <Field label="Review">
               <textarea
                 value={form.quote}
@@ -260,6 +264,7 @@ export default function AdminTestimonialsPage() {
                 required
               />
             </Field>
+
             <Field label="Admin notes">
               <textarea
                 value={form.admin_notes}
@@ -267,6 +272,7 @@ export default function AdminTestimonialsPage() {
                 className={textAreaClass}
               />
             </Field>
+
             <div className="grid gap-4 md:grid-cols-3">
               <Field label="Home order">
                 <input
@@ -281,73 +287,67 @@ export default function AdminTestimonialsPage() {
                 onChange={(checked) => setForm((current) => ({ ...current, is_featured_home: checked }))}
               />
             </div>
-            <div className="flex flex-wrap gap-3">
-              <button type="submit" className={primaryButtonClass} disabled={saving}>
-                {saving ? 'Saving...' : editingId ? 'Save testimonial' : 'Create testimonial'}
-              </button>
-              {editingId ? (
-                <button type="button" onClick={resetForm} className={secondaryButtonClass}>
-                  Cancel edit
-                </button>
-              ) : null}
-            </div>
+
+            <button type="submit" className={primaryButtonClass} disabled={saving}>
+              {saving ? 'Saving...' : 'Save testimonial'}
+            </button>
           </form>
         </section>
+      ) : null}
 
-        <section className={panelClass}>
-          <div className="flex items-center justify-between gap-3">
-            <div>
-              <h2 className="text-2xl font-bold text-[#0f0a1e]">Review queue</h2>
-              <p className="text-sm text-[#5a5872]">Pending reviews stay private until an admin approves them.</p>
-            </div>
-            <span className="rounded-full bg-[#fff4ea] px-3 py-1 text-xs font-semibold text-[#a45d15]">
-              {testimonials.filter((item) => item.status === 'PENDING').length} pending
-            </span>
+      <section className={panelClass}>
+        <div className="flex items-center justify-between gap-3">
+          <div>
+            <h2 className="text-2xl font-bold text-[#0f0a1e]">Review queue</h2>
+            <p className="text-sm text-[#5a5872]">Pending reviews stay private until an admin approves them.</p>
           </div>
+          <span className="rounded-full bg-[#fff4ea] px-3 py-1 text-xs font-semibold text-[#a45d15]">
+            {testimonials.filter((item) => item.status === 'PENDING').length} pending
+          </span>
+        </div>
 
-          <div className="mt-5 space-y-3">
-            {loading ? (
-              <p className="text-sm text-[#5a5872]">Loading testimonials...</p>
-            ) : sortedTestimonials.length === 0 ? (
-              <p className="rounded-2xl border border-dashed border-[#e5e4ef] px-4 py-6 text-sm text-[#7b7794]">
-                No testimonials yet.
-              </p>
-            ) : (
-              sortedTestimonials.map((item) => (
-                <EditableRow
-                  key={item.id}
-                  title={`${item.author_name} - ${item.rating}/5`}
-                  subtitle={`${item.service?.name || 'General review'} - ${item.quote}`}
-                  meta={item.author_email}
-                  onEdit={() => startEdit(item)}
-                >
-                  <span className={`rounded-full px-3 py-1 text-xs font-semibold ${statusTone(item.status)}`}>
-                    {item.status}
-                  </span>
-                  {item.status !== 'APPROVED' ? (
-                    <button
-                      type="button"
-                      onClick={() => quickModerate(item.id, 'APPROVED')}
-                      className="rounded-full border border-[#d9e8df] bg-[#eefaf3] px-3 py-1 text-xs font-medium text-[#137b45]"
-                    >
-                      Approve
-                    </button>
-                  ) : null}
-                  {item.status !== 'REJECTED' ? (
-                    <button
-                      type="button"
-                      onClick={() => quickModerate(item.id, 'REJECTED')}
-                      className="rounded-full border border-[#f4d7db] bg-[#fff1f3] px-3 py-1 text-xs font-medium text-[#b42341]"
-                    >
-                      Reject
-                    </button>
-                  ) : null}
-                </EditableRow>
-              ))
-            )}
-          </div>
-        </section>
-      </div>
+        <div className="mt-5 space-y-3">
+          {loading ? (
+            <p className="text-sm text-[#5a5872]">Loading testimonials...</p>
+          ) : sortedTestimonials.length === 0 ? (
+            <p className="rounded-2xl border border-dashed border-[#e5e4ef] px-4 py-6 text-sm text-[#7b7794]">
+              No testimonials yet.
+            </p>
+          ) : (
+            sortedTestimonials.map((item) => (
+              <EditableRow
+                key={item.id}
+                title={`${item.author_name} - ${item.rating}/5`}
+                subtitle={`${item.service?.name || 'General review'} - ${item.quote}`}
+                meta={item.author_email}
+                onEdit={() => startEdit(item)}
+              >
+                <span className={`rounded-full px-3 py-1 text-xs font-semibold ${statusTone(item.status)}`}>
+                  {item.status}
+                </span>
+                {item.status !== 'APPROVED' ? (
+                  <button
+                    type="button"
+                    onClick={() => quickModerate(item.id, 'APPROVED')}
+                    className="rounded-full border border-[#d9e8df] bg-[#eefaf3] px-3 py-1 text-xs font-medium text-[#137b45]"
+                  >
+                    Approve
+                  </button>
+                ) : null}
+                {item.status !== 'REJECTED' ? (
+                  <button
+                    type="button"
+                    onClick={() => quickModerate(item.id, 'REJECTED')}
+                    className="rounded-full border border-[#f4d7db] bg-[#fff1f3] px-3 py-1 text-xs font-medium text-[#b42341]"
+                  >
+                    Reject
+                  </button>
+                ) : null}
+              </EditableRow>
+            ))
+          )}
+        </div>
+      </section>
     </div>
   );
 }

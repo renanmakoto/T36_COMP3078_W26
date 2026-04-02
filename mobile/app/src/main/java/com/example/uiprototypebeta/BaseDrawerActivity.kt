@@ -119,8 +119,11 @@ open class BaseDrawerActivity : AppCompatActivity() {
     private fun onAdminClicked() {
         clearNavSelection()
         if (AdminSession.isLoggedIn) {
-            if (this !is AdminDashboardActivity) {
-                startActivity(Intent(this, AdminDashboardActivity::class.java))
+            if (this !is WebAdminActivity) {
+                startActivity(Intent(this, WebAdminActivity::class.java).apply {
+                    putExtra("title", "Admin dashboard")
+                    putExtra("path", "/admin/dashboard")
+                })
             }
         } else {
             if (this !is LoginActivity) {

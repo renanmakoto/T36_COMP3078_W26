@@ -1,11 +1,12 @@
 'use client';
 
-import { createContext, useContext, useEffect, useMemo, useState } from 'react';
+import { createContext, useContext, useMemo, useSyncExternalStore } from 'react';
 import { apiLogin as apiLoginCall, clearTokens, setTokens, type LoginResult } from './api';
 
 type Role = 'guest' | 'user' | 'admin';
 
 type SessionValue = {
+  isReady: boolean;
   role: Role;
   displayName: string;
   loginUser: (email: string, password: string) => Promise<string | null>;
@@ -13,28 +14,74 @@ type SessionValue = {
   logout: () => void;
 };
 
+type SessionSnapshot = {
+  isReady: boolean;
+  role: Role;
+  displayName: string;
+};
+
 const SessionContext = createContext<SessionValue | null>(null);
+const SESSION_CHANGE_EVENT = 'hb-session-change';
+const DEFAULT_SNAPSHOT: SessionSnapshot = { isReady: false, role: 'guest', displayName: '' };
+let cachedSnapshot: SessionSnapshot = DEFAULT_SNAPSHOT;
+
+function readSessionSnapshot(): SessionSnapshot {
+  if (typeof window === 'undefined') return DEFAULT_SNAPSHOT;
+
+  const savedRole = localStorage.getItem('hb-role') as Role | null;
+  const savedName = localStorage.getItem('hb-name');
+  const token = localStorage.getItem('hb-access');
+  const nextSnapshot: SessionSnapshot =
+    savedRole && token
+      ? {
+          isReady: true,
+          role: savedRole,
+          displayName: savedName || '',
+        }
+      : {
+          isReady: true,
+          role: 'guest',
+          displayName: '',
+        };
+
+  if (
+    cachedSnapshot.isReady === nextSnapshot.isReady &&
+    cachedSnapshot.role === nextSnapshot.role &&
+    cachedSnapshot.displayName === nextSnapshot.displayName
+  ) {
+    return cachedSnapshot;
+  }
+
+  cachedSnapshot = nextSnapshot;
+  return cachedSnapshot;
+}
+
+function subscribeSession(callback: () => void) {
+  if (typeof window === 'undefined') return () => {};
+
+  const handler = () => callback();
+  window.addEventListener('storage', handler);
+  window.addEventListener(SESSION_CHANGE_EVENT, handler);
+  return () => {
+    window.removeEventListener('storage', handler);
+    window.removeEventListener(SESSION_CHANGE_EVENT, handler);
+  };
+}
+
+function emitSessionChange() {
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new Event(SESSION_CHANGE_EVENT));
+  }
+}
 
 export function SessionProvider({ children }: { children: React.ReactNode }) {
-  const [role, setRole] = useState<Role>('guest');
-  const [displayName, setDisplayName] = useState<string>('');
-
-  // Restore session from localStorage on mount
-  useEffect(() => {
-    if (typeof window === 'undefined') return;
-    const savedRole = localStorage.getItem('hb-role') as Role | null;
-    const savedName = localStorage.getItem('hb-name');
-    const token = localStorage.getItem('hb-access');
-    if (savedRole && token) {
-      setRole(savedRole);
-      setDisplayName(savedName || '');
-    }
-  }, []);
+  const snapshot = useSyncExternalStore(subscribeSession, readSessionSnapshot, () => DEFAULT_SNAPSHOT);
 
   const value = useMemo<SessionValue>(
     () => ({
-      role,
-      displayName,
+      role: snapshot.role,
+      isReady: snapshot.isReady,
+      displayName: snapshot.displayName,
 
       loginUser: async (email: string, password: string): Promise<string | null> => {
         try {
@@ -42,10 +89,9 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
           setTokens(result.access, result.refresh);
           const name = result.user.display_name || result.user.email.split('@')[0];
           const nextRole: Role = result.user.role === 'ADMIN' ? 'admin' : 'user';
-          setRole(nextRole);
-          setDisplayName(name);
           localStorage.setItem('hb-role', nextRole);
           localStorage.setItem('hb-name', name);
+          emitSessionChange();
           return null;
         } catch (err: unknown) {
           return err instanceof Error ? err.message : 'Login failed.';
@@ -57,14 +103,14 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
           const result: LoginResult = await apiLoginCall(email, password);
           if (result.user.role !== 'ADMIN') {
             clearTokens();
+            emitSessionChange();
             return 'This account does not have admin privileges.';
           }
           setTokens(result.access, result.refresh);
-          setRole('admin');
           const name = result.user.display_name || 'Admin';
-          setDisplayName(name);
           localStorage.setItem('hb-role', 'admin');
           localStorage.setItem('hb-name', name);
+          emitSessionChange();
           return null;
         } catch (err: unknown) {
           return err instanceof Error ? err.message : 'Login failed.';
@@ -75,11 +121,10 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
         clearTokens();
         localStorage.removeItem('hb-role');
         localStorage.removeItem('hb-name');
-        setRole('guest');
-        setDisplayName('');
+        emitSessionChange();
       },
     }),
-    [role, displayName],
+    [snapshot.displayName, snapshot.isReady, snapshot.role],
   );
 
   return <SessionContext.Provider value={value}>{children}</SessionContext.Provider>;

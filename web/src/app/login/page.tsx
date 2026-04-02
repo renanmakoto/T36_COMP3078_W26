@@ -1,15 +1,30 @@
 'use client';
 
 import Link from 'next/link';
-import { FormEvent, useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { FormEvent, Suspense, useState } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { useSession } from '../session-context';
 
 export default function LoginPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="mx-auto max-w-xl rounded-3xl bg-white p-8 shadow-sm">
+          <p className="text-sm text-[#5a5872]">Loading sign-in...</p>
+        </div>
+      }
+    >
+      <LoginContent />
+    </Suspense>
+  );
+}
+
+function LoginContent() {
   const { loginUser } = useSession();
   const router = useRouter();
-  const [email, setEmail] = useState('daniel@example.com');
-  const [password, setPassword] = useState('Test1234!');
+  const search = useSearchParams();
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
@@ -22,8 +37,9 @@ export default function LoginPage() {
     if (err) {
       setError(err);
     } else {
+      const next = search.get('next');
       const nextRole = localStorage.getItem('hb-role');
-      router.push(nextRole === 'admin' ? '/admin/dashboard' : '/user/dashboard');
+      router.push(next || (nextRole === 'admin' ? '/admin/dashboard' : '/user/dashboard'));
     }
   }
 
@@ -59,7 +75,7 @@ export default function LoginPage() {
         <button
           type="submit"
           disabled={loading}
-          className="w-full rounded-xl bg-[#1a132f] px-4 py-3 text-white font-semibold shadow-sm hover:brightness-110 disabled:opacity-60"
+          className="w-full rounded-xl bg-[#1a132f] px-4 py-3 font-semibold text-white shadow-sm hover:brightness-110 disabled:opacity-60"
         >
           {loading ? 'Signing in...' : 'Sign in'}
         </button>
@@ -67,7 +83,10 @@ export default function LoginPage() {
 
       <div className="space-y-2 text-sm text-[#5a5872]">
         <p>Need an account?</p>
-        <Link className="font-semibold text-[#5b4fe5] hover:underline" href="/signup">
+        <Link
+          className="font-semibold text-[#5b4fe5] hover:underline"
+          href={search.get('next') ? `/signup?next=${encodeURIComponent(search.get('next') ?? '')}` : '/signup'}
+        >
           Go to sign up
         </Link>
       </div>

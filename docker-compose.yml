@@ -13,5 +13,23 @@ services:
     volumes:
       - pgdata:/var/lib/postgresql/data
 
+  backend:
+    build:
+      context: ./backend
+    restart: unless-stopped
+    depends_on:
+      - db
+    environment:
+      DATABASE_URL: postgresql://capstone_user:capstone_pass@db:5432/capstone
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./backend:/app
+      - backend_media:/app/media
+    command: >
+      sh -c "python manage.py migrate &&
+      python manage.py runserver 0.0.0.0:8000 --noreload"
+
 volumes:
   pgdata:
+  backend_media:

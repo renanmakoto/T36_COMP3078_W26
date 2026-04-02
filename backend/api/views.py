@@ -1,11 +1,18 @@
+import json
+import uuid
 from datetime import datetime, time, timedelta
 
-from django.db import IntegrityError
-from django.db.models import Count, F
+import resend
+from django.conf import settings
+from django.core import signing
+from django.core.files.storage import default_storage
+from django.db import IntegrityError, transaction
+from django.db.models import Count, F, Min, Sum
 from django.db.models.functions import TruncDate, TruncMonth
 from django.utils import timezone
 from rest_framework import generics, status
 from rest_framework.exceptions import ValidationError
+from rest_framework.parsers import FormParser, MultiPartParser
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -14,6 +21,7 @@ from rest_framework_simplejwt.views import TokenObtainPairView
 from .models import (
     AddOn,
     Appointment,
+    AppointmentNotificationEvent,
     AppointmentStatus,
     BlogPost,
     PortfolioItem,
@@ -21,6 +29,11 @@ from .models import (
     Testimonial,
     TestimonialStatus,
     User,
+)
+from .booking_notifications import (
+    handle_resend_webhook,
+    queue_booking_notifications,
+    resolve_booking_action_token,
 )
 from .permissions import IsAdmin
 from .serializers import (
@@ -79,6 +92,27 @@ def _ensure_within_business_hours(start_dt: datetime, end_dt: datetime):
         )
 
 
+def _current_local_time() -> datetime:
+    return timezone.localtime(timezone.now(), timezone.get_current_timezone())
+
+
+def _ensure_not_in_past(start_dt: datetime):
+    if start_dt <= _current_local_time():
+        raise ValidationError({"start_time": "start_time must be in the future."})
+
+
+def _parse_duration_param(value: str | None) -> int:
+    if not value:
+        return SLOT_MINUTES
+    try:
+        parsed = int(value)
+    except (TypeError, ValueError) as exc:
+        raise ValidationError({"duration": "duration must be a positive integer."}) from exc
+    if parsed <= 0:
+        raise ValidationError({"duration": "duration must be a positive integer."})
+    return parsed
+
+
 def _normalize_uuid_list(values: list[str] | None) -> list[str]:
     if not values:
         return []
@@ -126,17 +160,22 @@ def _ensure_no_conflict(start_dt: datetime, end_dt: datetime, exclude_id=None):
         raise ValidationError({"detail": "Requested time overlaps an existing appointment."})
 
 
+def _raise_conflict_error(exc: IntegrityError):
+    raise ValidationError({"detail": "Requested time overlaps an existing appointment."}) from exc
+
+
 def _get_or_create_booking_user(email: str, display_name: str = "") -> User:
     email = email.strip().lower()
     user = User.objects.filter(email__iexact=email).first()
     if user:
+        if user.role == User.Role.ADMIN:
+            raise ValidationError(
+                {"customer_email": "Admin accounts cannot be used as booking customers."}
+            )
         updated_fields: list[str] = []
         if display_name.strip() and not user.display_name:
             user.display_name = display_name.strip()
             updated_fields.append("display_name")
-        if user.role != User.Role.USER:
-            user.role = User.Role.USER
-            updated_fields.append("role")
         if updated_fields:
             user.save(update_fields=updated_fields)
         return user
@@ -147,6 +186,13 @@ def _get_or_create_booking_user(email: str, display_name: str = "") -> User:
         display_name=display_name.strip(),
         role=User.Role.USER,
     )
+
+
+def _ensure_customer_can_modify(appointment: Appointment, action: str):
+    if appointment.status in {AppointmentStatus.CANCELLED, AppointmentStatus.NO_SHOW}:
+        raise ValidationError({"detail": f"Cannot {action} an appointment in its current state."})
+    if appointment.start_time <= _current_local_time():
+        raise ValidationError({"detail": "Past appointments cannot be modified."})
 
 
 def _apply_appointment(
@@ -177,6 +223,20 @@ def _apply_appointment(
 
 def _appointment_queryset():
     return Appointment.objects.select_related("service", "user").prefetch_related("add_ons")
+
+
+def _get_appointment_from_email_token(token: str, *, expected_action: str | None = None) -> Appointment:
+    try:
+        payload = resolve_booking_action_token(token, expected_action=expected_action)
+    except signing.BadSignature as exc:
+        raise ValidationError({"detail": "Invalid or expired booking link."}) from exc
+
+    appointment = _appointment_queryset().filter(id=payload.get("appointment_id")).first()
+    if not appointment:
+        raise ValidationError({"detail": "Appointment not found."})
+    if appointment.user.email.lower() != str(payload.get("recipient_email", "")).lower():
+        raise ValidationError({"detail": "This booking link is no longer valid."})
+    return appointment
 
 
 class RegisterView(APIView):
@@ -348,13 +408,12 @@ class AvailabilityView(APIView):
 
     def get(self, request):
         target_date = _parse_date_param(request.query_params.get("date"))
-
-        duration_param = request.query_params.get("duration")
-        service_duration = int(duration_param) if duration_param else SLOT_MINUTES
+        service_duration = _parse_duration_param(request.query_params.get("duration"))
 
         tz = timezone.get_current_timezone()
         day_start = datetime.combine(target_date, BUSINESS_START)
         day_end = datetime.combine(target_date, BUSINESS_END)
+        current_local = _current_local_time()
 
         slots = []
         current = day_start
@@ -379,6 +438,8 @@ class AvailabilityView(APIView):
 
         available_slots = []
         for slot_start, slot_end in slot_windows:
+            if slot_start <= current_local:
+                continue
             conflict = appointments.filter(
                 start_time__lt=slot_end, end_time__gt=slot_start
             ).exists()
@@ -421,20 +482,25 @@ class AppointmentListCreateView(APIView):
         _ensure_aligned(time_value)
         start_dt = timezone.make_aware(datetime.combine(date_value, time_value), tz)
         end_dt = start_dt + timedelta(minutes=total_duration)
+        _ensure_not_in_past(start_dt)
         _ensure_within_business_hours(start_dt, end_dt)
         _ensure_no_conflict(start_dt, end_dt)
-
-        appointment = Appointment.objects.create(
-            user=request.user,
-            service=service,
-            start_time=start_dt,
-            end_time=end_dt,
-            total_price_cents=total_price,
-            total_duration_minutes=total_duration,
-            notes=serializer.validated_data.get("notes", ""),
-            status=AppointmentStatus.CONFIRMED,
-        )
-        appointment.add_ons.set(add_ons)
+        try:
+            with transaction.atomic():
+                appointment = Appointment.objects.create(
+                    user=request.user,
+                    service=service,
+                    start_time=start_dt,
+                    end_time=end_dt,
+                    total_price_cents=total_price,
+                    total_duration_minutes=total_duration,
+                    notes=serializer.validated_data.get("notes", ""),
+                    status=AppointmentStatus.CONFIRMED,
+                )
+                appointment.add_ons.set(add_ons)
+        except IntegrityError as exc:
+            _raise_conflict_error(exc)
+        queue_booking_notifications(appointment, AppointmentNotificationEvent.CREATED)
         return Response(
             AppointmentSerializer(appointment).data,
             status=status.HTTP_201_CREATED,
@@ -456,27 +522,42 @@ class AppointmentUpdateView(APIView):
 
         action = serializer.validated_data["action"]
         if action == "cancel":
-            appointment.status = AppointmentStatus.CANCELLED
-            appointment.save(update_fields=["status", "updated_at"])
+            _ensure_customer_can_modify(appointment, "cancel")
+            with transaction.atomic():
+                appointment.status = AppointmentStatus.CANCELLED
+                appointment.save(update_fields=["status", "updated_at"])
+            queue_booking_notifications(appointment, AppointmentNotificationEvent.CANCELLED)
             return Response(
                 AppointmentSerializer(appointment).data,
                 status=status.HTTP_200_OK,
             )
 
+        _ensure_customer_can_modify(appointment, "reschedule")
         tz = timezone.get_current_timezone()
         date_value = serializer.validated_data["date"]
         time_value = serializer.validated_data["start_time"]
 
         _ensure_aligned(time_value)
+        previous_start = appointment.start_time
         start_dt = timezone.make_aware(datetime.combine(date_value, time_value), tz)
         end_dt = start_dt + timedelta(minutes=appointment.total_duration_minutes or appointment.service.duration_minutes)
+        _ensure_not_in_past(start_dt)
         _ensure_within_business_hours(start_dt, end_dt)
         _ensure_no_conflict(start_dt, end_dt, exclude_id=appointment.id)
 
-        appointment.start_time = start_dt
-        appointment.end_time = end_dt
-        appointment.status = AppointmentStatus.CONFIRMED
-        appointment.save(update_fields=["start_time", "end_time", "status", "updated_at"])
+        try:
+            with transaction.atomic():
+                appointment.start_time = start_dt
+                appointment.end_time = end_dt
+                appointment.status = AppointmentStatus.CONFIRMED
+                appointment.save(update_fields=["start_time", "end_time", "status", "updated_at"])
+        except IntegrityError as exc:
+            _raise_conflict_error(exc)
+        queue_booking_notifications(
+            appointment,
+            AppointmentNotificationEvent.RESCHEDULED,
+            previous_start=previous_start,
+        )
 
         return Response(
             AppointmentSerializer(appointment).data,
@@ -604,18 +685,26 @@ class AdminAppointmentListCreateView(APIView):
         if serializer.validated_data["status"] != AppointmentStatus.CANCELLED:
             _ensure_within_business_hours(start_dt, end_dt)
             _ensure_no_conflict(start_dt, end_dt)
+        try:
+            with transaction.atomic():
+                appointment = Appointment.objects.create(
+                    user=user,
+                    service=service,
+                    start_time=start_dt,
+                    end_time=end_dt,
+                    total_price_cents=total_price,
+                    total_duration_minutes=total_duration,
+                    notes=serializer.validated_data.get("notes", ""),
+                    status=serializer.validated_data["status"],
+                )
+                appointment.add_ons.set(add_ons)
+        except IntegrityError as exc:
+            _raise_conflict_error(exc)
 
-        appointment = Appointment.objects.create(
-            user=user,
-            service=service,
-            start_time=start_dt,
-            end_time=end_dt,
-            total_price_cents=total_price,
-            total_duration_minutes=total_duration,
-            notes=serializer.validated_data.get("notes", ""),
-            status=serializer.validated_data["status"],
-        )
-        appointment.add_ons.set(add_ons)
+        if appointment.status == AppointmentStatus.NO_SHOW:
+            queue_booking_notifications(appointment, AppointmentNotificationEvent.NO_SHOW)
+        elif appointment.status != AppointmentStatus.CANCELLED:
+            queue_booking_notifications(appointment, AppointmentNotificationEvent.CREATED)
         return Response(
             AdminAppointmentSerializer(appointment).data,
             status=status.HTTP_201_CREATED,
@@ -638,6 +727,8 @@ class AdminAppointmentUpdateView(APIView):
         serializer = AdminAppointmentMutationSerializer(data=request.data, partial=True)
         serializer.is_valid(raise_exception=True)
         data = serializer.validated_data
+        previous_status = appointment.status
+        previous_start = appointment.start_time
 
         current_start = timezone.localtime(appointment.start_time)
         date_value = data.get("date", current_start.date())
@@ -677,16 +768,30 @@ class AdminAppointmentUpdateView(APIView):
         if status_value != AppointmentStatus.CANCELLED:
             _ensure_within_business_hours(start_dt, end_dt)
             _ensure_no_conflict(start_dt, end_dt, exclude_id=appointment.id)
+        try:
+            with transaction.atomic():
+                appointment = _apply_appointment(
+                    appointment,
+                    user=user,
+                    service=service,
+                    add_ons=add_ons,
+                    start_dt=start_dt,
+                    status_value=status_value,
+                    notes=notes,
+                )
+        except IntegrityError as exc:
+            _raise_conflict_error(exc)
 
-        appointment = _apply_appointment(
-            appointment,
-            user=user,
-            service=service,
-            add_ons=add_ons,
-            start_dt=start_dt,
-            status_value=status_value,
-            notes=notes,
-        )
+        if status_value == AppointmentStatus.CANCELLED and previous_status != AppointmentStatus.CANCELLED:
+            queue_booking_notifications(appointment, AppointmentNotificationEvent.CANCELLED)
+        elif status_value == AppointmentStatus.NO_SHOW and previous_status != AppointmentStatus.NO_SHOW:
+            queue_booking_notifications(appointment, AppointmentNotificationEvent.NO_SHOW)
+        elif start_dt != previous_start:
+            queue_booking_notifications(
+                appointment,
+                AppointmentNotificationEvent.RESCHEDULED,
+                previous_start=previous_start,
+            )
         return Response(
             AdminAppointmentSerializer(appointment).data,
             status=status.HTTP_200_OK,
@@ -696,16 +801,26 @@ class AdminAppointmentUpdateView(APIView):
         action = data["action"]
 
         if action == "cancel":
-            appointment.status = AppointmentStatus.CANCELLED
-            appointment.save(update_fields=["status", "updated_at"])
+            previous_status = appointment.status
+            with transaction.atomic():
+                appointment.status = AppointmentStatus.CANCELLED
+                appointment.save(update_fields=["status", "updated_at"])
+            if previous_status != AppointmentStatus.CANCELLED:
+                queue_booking_notifications(appointment, AppointmentNotificationEvent.CANCELLED)
             return Response(
                 AdminAppointmentSerializer(appointment).data,
                 status=status.HTTP_200_OK,
             )
 
         if action == "change_status":
-            appointment.status = data["status"]
-            appointment.save(update_fields=["status", "updated_at"])
+            previous_status = appointment.status
+            with transaction.atomic():
+                appointment.status = data["status"]
+                appointment.save(update_fields=["status", "updated_at"])
+            if appointment.status == AppointmentStatus.CANCELLED and previous_status != AppointmentStatus.CANCELLED:
+                queue_booking_notifications(appointment, AppointmentNotificationEvent.CANCELLED)
+            elif appointment.status == AppointmentStatus.NO_SHOW and previous_status != AppointmentStatus.NO_SHOW:
+                queue_booking_notifications(appointment, AppointmentNotificationEvent.NO_SHOW)
             return Response(
                 AdminAppointmentSerializer(appointment).data,
                 status=status.HTTP_200_OK,
@@ -716,18 +831,252 @@ class AdminAppointmentUpdateView(APIView):
         time_value = data["start_time"]
 
         _ensure_aligned(time_value)
+        previous_start = appointment.start_time
         start_dt = timezone.make_aware(datetime.combine(date_value, time_value), tz)
         end_dt = start_dt + timedelta(minutes=appointment.total_duration_minutes or appointment.service.duration_minutes)
         _ensure_within_business_hours(start_dt, end_dt)
         _ensure_no_conflict(start_dt, end_dt, exclude_id=appointment.id)
-
-        appointment.start_time = start_dt
-        appointment.end_time = end_dt
-        appointment.status = AppointmentStatus.CONFIRMED
-        appointment.save(update_fields=["start_time", "end_time", "status", "updated_at"])
+        try:
+            with transaction.atomic():
+                appointment.start_time = start_dt
+                appointment.end_time = end_dt
+                appointment.status = AppointmentStatus.CONFIRMED
+                appointment.save(update_fields=["start_time", "end_time", "status", "updated_at"])
+        except IntegrityError as exc:
+            _raise_conflict_error(exc)
+        queue_booking_notifications(
+            appointment,
+            AppointmentNotificationEvent.RESCHEDULED,
+            previous_start=previous_start,
+        )
 
         return Response(
             AdminAppointmentSerializer(appointment).data,
+            status=status.HTTP_200_OK,
+        )
+
+
+class ResendWebhookView(APIView):
+    authentication_classes = []
+    permission_classes = [AllowAny]
+
+    def post(self, request):
+        if not settings.RESEND_WEBHOOK_SECRET:
+            return Response(
+                {"detail": "Resend webhook secret is not configured."},
+                status=status.HTTP_503_SERVICE_UNAVAILABLE,
+            )
+
+        payload = request.body.decode("utf-8")
+        try:
+            resend.Webhooks.verify(
+                {
+                    "payload": payload,
+                    "webhook_secret": settings.RESEND_WEBHOOK_SECRET,
+                    "headers": {
+                        "id": request.headers.get("svix-id", ""),
+                        "timestamp": request.headers.get("svix-timestamp", ""),
+                        "signature": request.headers.get("svix-signature", ""),
+                    },
+                }
+            )
+        except ValueError as exc:
+            raise ValidationError({"detail": f"Invalid Resend webhook signature: {exc}"}) from exc
+
+        event = json.loads(payload)
+        handle_resend_webhook(event)
+        return Response({"ok": True}, status=status.HTTP_200_OK)
+
+
+class BookingEmailLinkView(APIView):
+    authentication_classes = []
+    permission_classes = [AllowAny]
+
+    def get(self, request):
+        token = request.query_params.get("token", "").strip()
+        if not token:
+            raise ValidationError({"token": "token query parameter is required."})
+
+        try:
+            payload = resolve_booking_action_token(token)
+        except signing.BadSignature as exc:
+            raise ValidationError({"detail": "Invalid or expired booking link."}) from exc
+
+        appointment = _get_appointment_from_email_token(token)
+        return Response(
+            {
+                "action": payload.get("action"),
+                "appointment": AppointmentSerializer(appointment).data,
+            },
+            status=status.HTTP_200_OK,
+        )
+
+
+class BookingEmailCancelView(APIView):
+    authentication_classes = []
+    permission_classes = [AllowAny]
+
+    def post(self, request):
+        token = str(request.data.get("token", "")).strip()
+        if not token:
+            raise ValidationError({"token": "token is required."})
+
+        appointment = _get_appointment_from_email_token(token, expected_action="cancel")
+        if appointment.status == AppointmentStatus.CANCELLED:
+            return Response(
+                {
+                    "result": "already_cancelled",
+                    "appointment": AppointmentSerializer(appointment).data,
+                },
+                status=status.HTTP_200_OK,
+            )
+
+        _ensure_customer_can_modify(appointment, "cancel")
+        with transaction.atomic():
+            appointment.status = AppointmentStatus.CANCELLED
+            appointment.save(update_fields=["status", "updated_at"])
+        queue_booking_notifications(appointment, AppointmentNotificationEvent.CANCELLED)
+
+        return Response(
+            {"result": "cancelled", "appointment": AppointmentSerializer(appointment).data},
+            status=status.HTTP_200_OK,
+        )
+
+
+class BookingEmailRescheduleView(APIView):
+    authentication_classes = []
+    permission_classes = [AllowAny]
+
+    def post(self, request):
+        token = str(request.data.get("token", "")).strip()
+        if not token:
+            raise ValidationError({"token": "token is required."})
+
+        serializer = AppointmentUpdateSerializer(
+            data={
+                "action": "reschedule",
+                "date": request.data.get("date"),
+                "start_time": request.data.get("start_time"),
+            }
+        )
+        serializer.is_valid(raise_exception=True)
+
+        appointment = _get_appointment_from_email_token(token, expected_action="reschedule")
+        _ensure_customer_can_modify(appointment, "reschedule")
+
+        tz = timezone.get_current_timezone()
+        data = serializer.validated_data
+        date_value = data["date"]
+        time_value = data["start_time"]
+
+        _ensure_aligned(time_value)
+        previous_start = appointment.start_time
+        start_dt = timezone.make_aware(datetime.combine(date_value, time_value), tz)
+        end_dt = start_dt + timedelta(
+            minutes=appointment.total_duration_minutes or appointment.service.duration_minutes
+        )
+        _ensure_not_in_past(start_dt)
+        _ensure_within_business_hours(start_dt, end_dt)
+        _ensure_no_conflict(start_dt, end_dt, exclude_id=appointment.id)
+
+        try:
+            with transaction.atomic():
+                appointment.start_time = start_dt
+                appointment.end_time = end_dt
+                appointment.status = AppointmentStatus.CONFIRMED
+                appointment.save(update_fields=["start_time", "end_time", "status", "updated_at"])
+        except IntegrityError as exc:
+            _raise_conflict_error(exc)
+
+        queue_booking_notifications(
+            appointment,
+            AppointmentNotificationEvent.RESCHEDULED,
+            previous_start=previous_start,
+        )
+        return Response(
+            {"result": "rescheduled", "appointment": AppointmentSerializer(appointment).data},
+            status=status.HTTP_200_OK,
+        )
+
+
+class AdminImageUploadView(APIView):
+    permission_classes = [IsAuthenticated, IsAdmin]
+    parser_classes = [MultiPartParser, FormParser]
+
+    def post(self, request):
+        upload = request.FILES.get("file")
+        if not upload:
+            raise ValidationError({"file": "file is required."})
+
+        content_type = getattr(upload, "content_type", "") or ""
+        if not content_type.startswith("image/"):
+            raise ValidationError({"file": "Only image uploads are supported."})
+        if upload.size > 8 * 1024 * 1024:
+            raise ValidationError({"file": "Image must be 8 MB or smaller."})
+
+        kind = str(request.data.get("kind", "misc")).strip().lower() or "misc"
+        if kind not in {"service", "portfolio", "blog", "misc"}:
+            kind = "misc"
+
+        base_name = upload.name.rsplit("/", 1)[-1].rsplit("\\", 1)[-1]
+        extension = ""
+        if "." in base_name:
+            extension = f".{base_name.rsplit('.', 1)[-1].lower()}"
+        filename = f"uploads/{kind}/{uuid.uuid4().hex}{extension}"
+        stored_path = default_storage.save(filename, upload)
+        url = request.build_absolute_uri(default_storage.url(stored_path))
+
+        return Response(
+            {
+                "url": url,
+                "path": stored_path,
+                "name": base_name,
+                "size": upload.size,
+                "content_type": content_type,
+            },
+            status=status.HTTP_201_CREATED,
+        )
+
+
+class AnalyticsOverviewView(APIView):
+    permission_classes = [IsAuthenticated, IsAdmin]
+
+    def get(self, request):
+        tz = timezone.get_current_timezone()
+        now = timezone.localtime(timezone.now(), tz)
+        today_start = timezone.make_aware(datetime.combine(now.date(), time.min), tz)
+        tomorrow_start = today_start + timedelta(days=1)
+        month_start = today_start.replace(day=1)
+        next_month_start = (month_start + timedelta(days=32)).replace(day=1)
+
+        active_qs = Appointment.objects.exclude(status=AppointmentStatus.CANCELLED)
+        completed_qs = active_qs.filter(status=AppointmentStatus.CONFIRMED, start_time__lt=now)
+        scheduled_qs = active_qs.filter(status__in=[AppointmentStatus.PENDING, AppointmentStatus.CONFIRMED])
+
+        client_counts = active_qs.values("user_id").annotate(total=Count("id"))
+        first_appointments = active_qs.values("user_id").annotate(first_start=Min("start_time"))
+
+        return Response(
+            {
+                "total_bookings": active_qs.count(),
+                "upcoming_bookings": scheduled_qs.filter(start_time__gte=now).count(),
+                "today_bookings": active_qs.filter(
+                    start_time__gte=today_start,
+                    start_time__lt=tomorrow_start,
+                ).count(),
+                "scheduled_revenue_cents": scheduled_qs.aggregate(total=Sum("total_price_cents"))["total"] or 0,
+                "completed_revenue_cents": completed_qs.aggregate(total=Sum("total_price_cents"))["total"] or 0,
+                "this_month_revenue_cents": active_qs.filter(
+                    start_time__gte=month_start,
+                    start_time__lt=next_month_start,
+                ).aggregate(total=Sum("total_price_cents"))["total"] or 0,
+                "unique_clients": active_qs.values("user_id").distinct().count(),
+                "returning_clients": client_counts.filter(total__gt=1).count(),
+                "new_clients_this_month": first_appointments.filter(
+                    first_start__gte=month_start,
+                    first_start__lt=next_month_start,
+                ).count(),
+            },
             status=status.HTTP_200_OK,
         )
 

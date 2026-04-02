@@ -49,6 +49,9 @@ venv/
 
 # Environment files
 .env
+backend/env
+backend/.env
+!backend/.env.example
 
 # Django
 db.sqlite3
