@@ -1,4 +1,4 @@
-package com.example.uiprototypebeta
+package com.brazwebdes.hairstylistbooking
 
 import android.content.Context
 import android.content.Intent

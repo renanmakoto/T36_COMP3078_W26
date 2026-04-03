@@ -1,4 +1,4 @@
-package com.example.uiprototypebeta
+package com.brazwebdes.hairstylistbooking
 
 import android.annotation.SuppressLint
 import android.os.Bundle

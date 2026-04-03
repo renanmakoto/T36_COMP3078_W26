@@ -1,10 +1,10 @@
-package com.example.uiprototypebeta
+package com.brazwebdes.hairstylistbooking
 
 import android.content.Intent
 import android.os.Bundle
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
-import com.example.uiprototypebeta.databinding.ActivityLoginBinding
+import com.brazwebdes.hairstylistbooking.databinding.ActivityLoginBinding
 
 class LoginActivity : AppCompatActivity() {
 
@@ -46,21 +46,19 @@ class LoginActivity : AppCompatActivity() {
                     val displayName = user.optString("display_name").ifBlank { userEmail.substringBefore("@") }
 
                     runOnUiThread {
-                        ApiClient.accessToken = access
-                        ApiClient.refreshToken = refresh
-
                         if (role == "ADMIN") {
                             UserSession.clear()
+                            ApiClient.accessToken = access
+                            ApiClient.refreshToken = refresh
                             AdminSession.isLoggedIn = true
                             AdminSession.displayName = displayName
                             AdminSession.email = userEmail
                             Toast.makeText(this, "Signed in as admin", Toast.LENGTH_SHORT).show()
-                            startActivity(Intent(this, WebAdminActivity::class.java).apply {
-                                putExtra("title", "Admin dashboard")
-                                putExtra("path", "/admin/dashboard")
-                            })
+                            startActivity(AdminDashboardActivity.intent(this))
                         } else {
                             AdminSession.clear()
+                            ApiClient.accessToken = access
+                            ApiClient.refreshToken = refresh
                             UserSession.isLoggedIn = true
                             UserSession.displayName = displayName
                             UserSession.userId = userId

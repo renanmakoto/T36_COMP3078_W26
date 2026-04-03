@@ -1,4 +1,4 @@
-package com.example.uiprototypebeta
+package com.brazwebdes.hairstylistbooking
 
 import java.text.SimpleDateFormat
 import java.util.Calendar

@@ -1,4 +1,4 @@
-package com.example.uiprototypebeta
+package com.brazwebdes.hairstylistbooking
 
 object SiteConfig {
     const val brandName = "Brazdes"

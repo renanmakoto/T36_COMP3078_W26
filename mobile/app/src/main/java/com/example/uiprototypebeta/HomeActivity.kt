@@ -1,4 +1,4 @@
-package com.example.uiprototypebeta
+package com.brazwebdes.hairstylistbooking
 
 import android.content.Intent
 import android.graphics.Typeface
@@ -120,7 +120,8 @@ class HomeActivity : BaseDrawerActivity() {
         }
         leadBody.text = lead?.description?.ifBlank {
             "A polished appointment designed for clients who want a clean finish, practical maintenance, and easy booking management."
-        } ?: "A polished appointment designed for clients who want a clean finish, practical maintenance, and easy booking management."
+        }
+            ?: "A polished appointment designed for clients who want a clean finish, practical maintenance, and easy booking management."
     }
 
     private fun renderPortfolio(items: List<PortfolioEntry>) {
@@ -166,7 +167,7 @@ class HomeActivity : BaseDrawerActivity() {
                 setPadding(dp(18), dp(18), dp(18), dp(18))
             }
             body.addView(TextView(this).apply {
-                text = "★".repeat(item.rating.coerceIn(1, 5)) + "  ${item.rating}/5"
+                text = "${ratingStars(item.rating)}  ${item.rating}/5"
                 setTextColor(ContextCompat.getColor(context, android.R.color.holo_orange_dark))
                 setTextSize(android.util.TypedValue.COMPLEX_UNIT_SP, 13f)
                 setTypeface(typeface, Typeface.BOLD)
@@ -216,6 +217,14 @@ class HomeActivity : BaseDrawerActivity() {
                     if (index > 0) marginStart = dp(8)
                 }
             })
+        }
+    }
+
+    private fun ratingStars(rating: Int): String {
+        return buildString {
+            repeat(rating.coerceIn(1, 5)) {
+                append('\u2605')
+            }
         }
     }
 

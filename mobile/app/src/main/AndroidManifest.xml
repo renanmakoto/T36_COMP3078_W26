@@ -12,7 +12,7 @@
 
         <activity android:name=".WebAdminActivity" android:exported="false"/>
         <activity android:name=".AdminDashboardActivity" android:exported="false"/>
-        <activity android:name=".AdminLoginActivity" android:exported="false"/>
+        <activity android:name=".BookingConfirmedActivity" android:exported="false"/>
         <activity android:name=".SignUpActivity" android:exported="false"/>
         <activity android:name=".BlogActivity" android:exported="false"/>
         <activity android:name=".BlogDetailActivity" android:exported="false"/>

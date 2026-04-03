@@ -1,4 +1,4 @@
-package com.example.uiprototypebeta
+package com.brazwebdes.hairstylistbooking
 
 /** Tracks whether an admin session is active. */
 object AdminSession {

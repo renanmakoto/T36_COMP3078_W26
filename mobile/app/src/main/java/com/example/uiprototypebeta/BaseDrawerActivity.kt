@@ -1,4 +1,4 @@
-package com.example.uiprototypebeta
+package com.brazwebdes.hairstylistbooking
 
 import android.content.Intent
 import android.os.Bundle
@@ -119,11 +119,8 @@ open class BaseDrawerActivity : AppCompatActivity() {
     private fun onAdminClicked() {
         clearNavSelection()
         if (AdminSession.isLoggedIn) {
-            if (this !is WebAdminActivity) {
-                startActivity(Intent(this, WebAdminActivity::class.java).apply {
-                    putExtra("title", "Admin dashboard")
-                    putExtra("path", "/admin/dashboard")
-                })
+            if (this !is AdminDashboardActivity) {
+                startActivity(AdminDashboardActivity.intent(this))
             }
         } else {
             if (this !is LoginActivity) {
@@ -177,8 +174,11 @@ open class BaseDrawerActivity : AppCompatActivity() {
     }
 
     private fun syncAuthVisibility() {
-        val isAnyoneLoggedIn = AdminSession.isLoggedIn || UserSession.isLoggedIn
-        showLogoutOption(isAnyoneLoggedIn)
+        val isAdminLoggedIn = AdminSession.isLoggedIn
+        val isUserLoggedIn = UserSession.isLoggedIn
+        showLogoutOption(isAdminLoggedIn || isUserLoggedIn)
+        adminFooter.visibility = if (isAdminLoggedIn) View.VISIBLE else View.GONE
+        userFooter.visibility = if (isAdminLoggedIn) View.GONE else View.VISIBLE
     }
 
     protected fun updateUserFooterLabel() {

@@ -92,6 +92,7 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:background="@drawable/drawer_item_bg"
+            android:visibility="gone"
             android:paddingLeft="16dp"
             android:paddingRight="16dp"
             android:clickable="true"

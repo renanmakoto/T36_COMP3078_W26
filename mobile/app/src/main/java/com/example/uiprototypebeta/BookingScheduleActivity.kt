@@ -1,4 +1,4 @@
-package com.example.uiprototypebeta
+package com.brazwebdes.hairstylistbooking
 
 import android.content.Intent
 import android.os.Bundle
@@ -6,7 +6,7 @@ import android.view.View
 import android.widget.CalendarView
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
-import com.example.uiprototypebeta.databinding.ActivityBookingScheduleBinding
+import com.brazwebdes.hairstylistbooking.databinding.ActivityBookingScheduleBinding
 import com.google.android.material.chip.Chip
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import java.text.SimpleDateFormat
@@ -205,16 +205,20 @@ class BookingScheduleActivity : AppCompatActivity() {
     }
 
     private fun showSignInPrompt() {
+        val dateLabel = selectedDateKey?.let { formatDateLabelForSummary(it) } ?: "selected date"
+        val timeLabel = selectedSlot?.let { to12Hour(it) } ?: "selected time"
+        val summaryPrice = formatMoney(totalPriceCents.coerceAtLeast(basePriceCents))
         MaterialAlertDialogBuilder(this)
             .setTitle("Sign in to confirm this appointment")
             .setMessage(
-                "You can browse the schedule without an account. To lock this time and finish the booking, sign in or create your client account first."
+                "$serviceTitle\n$dateLabel at $timeLabel\n$summaryPrice\n\n" +
+                    "You can browse the schedule without an account. To lock this time and finish the booking, sign in or create your client account first."
             )
-            .setPositiveButton("Sign in") { _, _ ->
+            .setPositiveButton("Sign in to continue") { _, _ ->
                 startActivity(Intent(this, LoginActivity::class.java))
                 finish()
             }
-            .setNeutralButton("Create account") { _, _ ->
+            .setNeutralButton("Create client account") { _, _ ->
                 startActivity(Intent(this, SignUpActivity::class.java))
                 finish()
             }
@@ -235,8 +239,15 @@ class BookingScheduleActivity : AppCompatActivity() {
                 onSuccess = {
                     runOnUiThread {
                         PendingBookingDraftStore.clear(this)
-                        Toast.makeText(this, "Appointment updated", Toast.LENGTH_SHORT).show()
-                        startActivity(Intent(this, UserDashboardActivity::class.java))
+                        startActivity(
+                            BookingConfirmedActivity.intent(
+                                context = this,
+                                mode = BookingConfirmedActivity.Mode.RESCHEDULED,
+                                title = serviceTitle,
+                                date = date,
+                                time = slot,
+                            )
+                        )
                         finish()
                     }
                 },
@@ -257,8 +268,15 @@ class BookingScheduleActivity : AppCompatActivity() {
                 onSuccess = {
                     runOnUiThread {
                         PendingBookingDraftStore.clear(this)
-                        Toast.makeText(this, "Appointment booked", Toast.LENGTH_SHORT).show()
-                        startActivity(Intent(this, UserDashboardActivity::class.java))
+                        startActivity(
+                            BookingConfirmedActivity.intent(
+                                context = this,
+                                mode = BookingConfirmedActivity.Mode.CREATED,
+                                title = serviceTitle,
+                                date = date,
+                                time = slot,
+                            )
+                        )
                         finish()
                     }
                 },

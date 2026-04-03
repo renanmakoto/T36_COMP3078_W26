@@ -1,4 +1,4 @@
-package com.example.uiprototypebeta
+package com.brazwebdes.hairstylistbooking
 
 import okhttp3.Call
 import okhttp3.Callback
@@ -186,12 +186,39 @@ object ApiClient {
         getArray("/admin/appointments", authenticated = true, onSuccess = onSuccess, onError = onError)
     }
 
+    fun getAdminTestimonials(
+        onSuccess: (JSONArray) -> Unit,
+        onError: (String) -> Unit
+    ) {
+        getArray("/admin/testimonials", authenticated = true, onSuccess = onSuccess, onError = onError)
+    }
+
+    fun getAnalyticsOverview(
+        onSuccess: (JSONObject) -> Unit,
+        onError: (String) -> Unit
+    ) {
+        get("/admin/analytics/overview", authenticated = true, onSuccess = onSuccess, onError = onError)
+    }
+
     fun adminCancelAppointment(
         id: String,
         onSuccess: (JSONObject) -> Unit,
         onError: (String) -> Unit
     ) {
         val body = JSONObject().apply { put("action", "cancel") }
+        patch("/admin/appointments/$id", body, onSuccess = onSuccess, onError = onError)
+    }
+
+    fun adminChangeStatus(
+        id: String,
+        status: String,
+        onSuccess: (JSONObject) -> Unit,
+        onError: (String) -> Unit
+    ) {
+        val body = JSONObject().apply {
+            put("action", "change_status")
+            put("status", status)
+        }
         patch("/admin/appointments/$id", body, onSuccess = onSuccess, onError = onError)
     }
 

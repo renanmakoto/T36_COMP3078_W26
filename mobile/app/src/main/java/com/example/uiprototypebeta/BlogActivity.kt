@@ -1,4 +1,4 @@
-package com.example.uiprototypebeta
+package com.brazwebdes.hairstylistbooking
 
 import android.content.Intent
 import android.graphics.Typeface
@@ -29,10 +29,7 @@ class BlogActivity : BaseDrawerActivity() {
 
         manageButton.visibility = if (AdminSession.isLoggedIn) View.VISIBLE else View.GONE
         manageButton.setOnClickListener {
-            startActivity(Intent(this, WebAdminActivity::class.java).apply {
-                putExtra("title", "Blog")
-                putExtra("path", "/admin/dashboard/blog")
-            })
+            startActivity(AdminDashboardActivity.intent(this, initialView = AdminDashboardActivity.ViewMode.ANALYTICS))
         }
 
         loadPosts()

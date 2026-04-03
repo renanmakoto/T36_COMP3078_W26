@@ -1,4 +1,4 @@
-package com.example.uiprototypebeta
+package com.brazwebdes.hairstylistbooking
 
 /** Tracks whether a regular user session is active. */
 object UserSession {

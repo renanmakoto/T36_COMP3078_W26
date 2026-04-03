@@ -1,8 +1,9 @@
-package com.example.uiprototypebeta
+package com.brazwebdes.hairstylistbooking
 
 import android.content.Intent
 import android.graphics.Typeface
 import android.os.Bundle
+import android.view.View
 import android.widget.ArrayAdapter
 import android.widget.ImageView
 import android.widget.LinearLayout
@@ -53,12 +54,9 @@ class PortfolioActivity : BaseDrawerActivity() {
 
         authorInput.setText(UserSession.displayName)
 
-        manageButton.visibility = if (AdminSession.isLoggedIn) android.view.View.VISIBLE else android.view.View.GONE
+        manageButton.visibility = if (AdminSession.isLoggedIn) View.VISIBLE else View.GONE
         manageButton.setOnClickListener {
-            startActivity(Intent(this, WebAdminActivity::class.java).apply {
-                putExtra("title", "Portfolio and reviews")
-                putExtra("path", "/admin/dashboard/portfolio")
-            })
+            startActivity(AdminDashboardActivity.intent(this, initialView = AdminDashboardActivity.ViewMode.ANALYTICS))
         }
 
         ratingSpinner.adapter = ArrayAdapter(
@@ -68,7 +66,12 @@ class PortfolioActivity : BaseDrawerActivity() {
         )
 
         testimonialFilterSpinner.onItemSelectedListener = object : android.widget.AdapterView.OnItemSelectedListener {
-            override fun onItemSelected(parent: android.widget.AdapterView<*>?, view: android.view.View?, position: Int, id: Long) {
+            override fun onItemSelected(
+                parent: android.widget.AdapterView<*>?,
+                view: View?,
+                position: Int,
+                id: Long,
+            ) {
                 showAllTestimonials = false
                 renderTestimonials()
             }
@@ -88,7 +91,7 @@ class PortfolioActivity : BaseDrawerActivity() {
 
     override fun onResume() {
         super.onResume()
-        manageButton.visibility = if (AdminSession.isLoggedIn) android.view.View.VISIBLE else android.view.View.GONE
+        manageButton.visibility = if (AdminSession.isLoggedIn) View.VISIBLE else View.GONE
         if (authorInput.text.isNullOrBlank()) {
             authorInput.setText(UserSession.displayName)
         }
@@ -230,7 +233,7 @@ class PortfolioActivity : BaseDrawerActivity() {
 
         if (filtered.isEmpty()) {
             testimonialsContainer.addView(messageCard("No approved testimonials for this filter yet."))
-            viewMoreTestimonialsButton.visibility = android.view.View.GONE
+            viewMoreTestimonialsButton.visibility = View.GONE
             return
         }
 
@@ -249,7 +252,7 @@ class PortfolioActivity : BaseDrawerActivity() {
                 setPadding(dp(18), dp(18), dp(18), dp(18))
             }
             body.addView(TextView(this).apply {
-                text = "★".repeat(item.rating.coerceIn(1, 5)) + "  ${item.rating}/5"
+                text = "${ratingStars(item.rating)}  ${item.rating}/5"
                 setTextColor(ContextCompat.getColor(context, android.R.color.holo_orange_dark))
                 setTextSize(android.util.TypedValue.COMPLEX_UNIT_SP, 13f)
                 setTypeface(typeface, Typeface.BOLD)
@@ -277,10 +280,10 @@ class PortfolioActivity : BaseDrawerActivity() {
         }
 
         if (filtered.size > 4) {
-            viewMoreTestimonialsButton.visibility = android.view.View.VISIBLE
+            viewMoreTestimonialsButton.visibility = View.VISIBLE
             viewMoreTestimonialsButton.text = if (showAllTestimonials) "Show less" else "View more"
         } else {
-            viewMoreTestimonialsButton.visibility = android.view.View.GONE
+            viewMoreTestimonialsButton.visibility = View.GONE
         }
     }
 
@@ -347,5 +350,13 @@ class PortfolioActivity : BaseDrawerActivity() {
             setTextColor(ContextCompat.getColor(context, R.color.brand_muted))
         })
         return card
+    }
+
+    private fun ratingStars(rating: Int): String {
+        return buildString {
+            repeat(rating.coerceIn(1, 5)) {
+                append('\u2605')
+            }
+        }
     }
 }
