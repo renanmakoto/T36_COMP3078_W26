@@ -176,6 +176,15 @@
                     android:textColor="@color/brand_text"
                     android:textSize="13sp"
                     android:textStyle="bold" />
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/btnPrivacyPolicy"
+                    style="@style/Widget.MaterialComponents.Button.TextButton"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:minWidth="0dp"
+                    android:paddingStart="0dp"
+                    android:text="Open privacy policy" />
             </LinearLayout>
         </com.google.android.material.card.MaterialCardView>
 

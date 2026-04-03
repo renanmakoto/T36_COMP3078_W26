@@ -4,8 +4,11 @@
     <string name="navigation_drawer_open">Open navigation menu</string>
     <string name="navigation_drawer_close">Close navigation menu</string>
     <string name="admin_login">Admin dashboard</string>
+    <string name="admin_dashboard">Admin dashboard</string>
     <string name="admin_logout">Log out</string>
     <string name="user_login">Sign in</string>
+    <string name="user_sign_in">Sign in</string>
+    <string name="user_dashboard">My bookings</string>
     <string name="login_required_title">Login required</string>
     <string name="login_required_message">Please sign in before continuing with your booking.</string>
     <string name="action_ok">OK</string>

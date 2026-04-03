@@ -1,6 +1,6 @@
 package com.brazwebdes.hairstylistbooking
 
-/** Tracks whether a regular user session is active. */
+/** Tracks whether a regular user session is active in memory. */
 object UserSession {
     var isLoggedIn: Boolean = false
     var displayName: String = ""
@@ -12,7 +12,5 @@ object UserSession {
         displayName = ""
         userId = ""
         userEmail = ""
-        ApiClient.accessToken = null
-        ApiClient.refreshToken = null
     }
 }

@@ -1,6 +1,7 @@
 package com.brazwebdes.hairstylistbooking
 
 import android.content.Intent
+import android.net.Uri
 import android.os.Bundle
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
@@ -9,6 +10,7 @@ import com.brazwebdes.hairstylistbooking.databinding.ActivityLoginBinding
 class LoginActivity : AppCompatActivity() {
 
     private lateinit var binding: ActivityLoginBinding
+    private var restoringSession = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -30,8 +32,7 @@ class LoginActivity : AppCompatActivity() {
                 return@setOnClickListener
             }
 
-            binding.btnSignIn.isEnabled = false
-            binding.btnSignIn.text = "Signing in..."
+            setBusyState(active = true, signInLabel = "Signing in...")
 
             ApiClient.login(
                 email = email,
@@ -47,22 +48,24 @@ class LoginActivity : AppCompatActivity() {
 
                     runOnUiThread {
                         if (role == "ADMIN") {
-                            UserSession.clear()
-                            ApiClient.accessToken = access
-                            ApiClient.refreshToken = refresh
-                            AdminSession.isLoggedIn = true
-                            AdminSession.displayName = displayName
-                            AdminSession.email = userEmail
+                            AppSessionStore.saveAdminSession(
+                                context = this,
+                                access = access,
+                                refresh = refresh,
+                                displayName = displayName,
+                                email = userEmail
+                            )
                             Toast.makeText(this, "Signed in as admin", Toast.LENGTH_SHORT).show()
-                            startActivity(AdminDashboardActivity.intent(this))
+                            startAdminDestination()
                         } else {
-                            AdminSession.clear()
-                            ApiClient.accessToken = access
-                            ApiClient.refreshToken = refresh
-                            UserSession.isLoggedIn = true
-                            UserSession.displayName = displayName
-                            UserSession.userId = userId
-                            UserSession.userEmail = userEmail
+                            AppSessionStore.saveUserSession(
+                                context = this,
+                                access = access,
+                                refresh = refresh,
+                                displayName = displayName,
+                                userId = userId,
+                                email = userEmail
+                            )
                             Toast.makeText(this, "Signed in as $userEmail", Toast.LENGTH_SHORT).show()
 
                             val draftIntent = PendingBookingDraftStore.draftIntent(this)
@@ -77,8 +80,7 @@ class LoginActivity : AppCompatActivity() {
                 },
                 onError = { msg ->
                     runOnUiThread {
-                        binding.btnSignIn.isEnabled = true
-                        binding.btnSignIn.text = "Sign in"
+                        setBusyState(active = false, signInLabel = "Sign in")
                         Toast.makeText(this, "Login failed: $msg", Toast.LENGTH_LONG).show()
                     }
                 }
@@ -92,5 +94,108 @@ class LoginActivity : AppCompatActivity() {
         binding.btnSignUp.setOnClickListener {
             startActivity(Intent(this, SignUpActivity::class.java))
         }
+
+        binding.btnPrivacyPolicy.setOnClickListener {
+            openExternalUrl(ApiClient.privacyPolicyUrl)
+        }
+
+        if (redirectAuthenticatedUser()) {
+            return
+        }
+
+        maybeRestoreStoredSession()
+    }
+
+    private fun redirectAuthenticatedUser(): Boolean {
+        return when {
+            AdminSession.isLoggedIn -> {
+                startAdminDestination()
+                finish()
+                true
+            }
+            UserSession.isLoggedIn -> {
+                val nextIntent = PendingBookingDraftStore.draftIntent(this) ?: Intent(this, UserDashboardActivity::class.java)
+                startActivity(nextIntent)
+                finish()
+                true
+            }
+            else -> false
+        }
+    }
+
+    private fun maybeRestoreStoredSession() {
+        if (!AppSessionStore.hasPendingSession() || restoringSession) {
+            return
+        }
+
+        restoringSession = true
+        setBusyState(active = true, signInLabel = "Restoring session...")
+
+        ApiClient.validateStoredSession(
+            onValid = {
+                runOnUiThread {
+                    restoringSession = false
+                    setBusyState(active = false, signInLabel = "Sign in")
+                    redirectAuthenticatedUser()
+                }
+            },
+            onInvalid = { message ->
+                runOnUiThread {
+                    restoringSession = false
+                    setBusyState(active = false, signInLabel = "Sign in")
+                    Toast.makeText(this, message, Toast.LENGTH_LONG).show()
+                }
+            },
+            onNetworkError = { message ->
+                runOnUiThread {
+                    restoringSession = false
+                    setBusyState(active = false, signInLabel = "Sign in")
+                    Toast.makeText(this, message, Toast.LENGTH_LONG).show()
+                }
+            }
+        )
+    }
+
+    private fun setBusyState(active: Boolean, signInLabel: String) {
+        binding.btnSignIn.isEnabled = !active
+        binding.btnGuest.isEnabled = !active
+        binding.btnSignUp.isEnabled = !active
+        binding.btnSignIn.text = signInLabel
+    }
+
+    private fun openExternalUrl(url: String) {
+        try {
+            startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
+        } catch (_: Exception) {
+            Toast.makeText(this, "Unable to open link", Toast.LENGTH_LONG).show()
+        }
+    }
+
+    private fun startAdminDestination() {
+        val restorePath = intent.getStringExtra(EXTRA_RESTORE_ADMIN_WEB_PATH).orEmpty()
+        val restoreTitle = intent.getStringExtra(EXTRA_RESTORE_ADMIN_WEB_TITLE).orEmpty()
+        val restoreDashboardView = intent.getStringExtra(EXTRA_RESTORE_ADMIN_DASHBOARD_VIEW).orEmpty()
+        if (restorePath.isNotBlank()) {
+            startActivity(
+                WebAdminActivity.intent(
+                    context = this,
+                    title = restoreTitle.ifBlank { "Admin" },
+                    path = restorePath
+                )
+            )
+        } else {
+            val initialView = when (restoreDashboardView) {
+                AdminDashboardActivity.ViewMode.ANALYTICS.name -> AdminDashboardActivity.ViewMode.ANALYTICS
+                AdminDashboardActivity.ViewMode.BOOKINGS.name, "CALENDAR" -> AdminDashboardActivity.ViewMode.BOOKINGS
+                else -> AdminDashboardActivity.ViewMode.OVERVIEW
+            }
+            startActivity(AdminDashboardActivity.intent(this, initialView = initialView))
+        }
+    }
+
+    companion object {
+        const val EXTRA_RESTORE_ADMIN_WEB_TITLE = "restore_admin_web_title"
+        const val EXTRA_RESTORE_ADMIN_WEB_PATH = "restore_admin_web_path"
+        const val EXTRA_RESTORE_ADMIN_DASHBOARD_VIEW = "restore_admin_dashboard_view"
     }
 }

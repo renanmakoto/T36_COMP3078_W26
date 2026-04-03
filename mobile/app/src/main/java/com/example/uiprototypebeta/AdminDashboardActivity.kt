@@ -85,6 +85,7 @@ class AdminDashboardActivity : BaseDrawerActivity() {
     private lateinit var tvHeroTitle: TextView
     private lateinit var tvHeroBody: TextView
     private lateinit var btnQuickRefresh: MaterialButton
+    private lateinit var btnQuickServices: MaterialButton
     private lateinit var btnQuickPortfolio: MaterialButton
     private lateinit var btnQuickBlog: MaterialButton
     private lateinit var btnOverviewTab: Button
@@ -95,6 +96,7 @@ class AdminDashboardActivity : BaseDrawerActivity() {
     private lateinit var tvMetricUpcomingBookings: TextView
     private lateinit var tvMetricScheduledRevenue: TextView
     private lateinit var tvMetricPendingReviews: TextView
+    private lateinit var cardPendingReviews: MaterialCardView
     private lateinit var overviewSection: LinearLayout
     private lateinit var analyticsSection: LinearLayout
     private lateinit var bookingsSection: LinearLayout
@@ -125,6 +127,7 @@ class AdminDashboardActivity : BaseDrawerActivity() {
     private var monthlyCounts: List<BarDatum> = emptyList()
     private var noShowSnapshot: NoShowSnapshot = NoShowSnapshot()
     private var loadVersion: Int = 0
+    private var redirectingToLogin: Boolean = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -137,7 +140,7 @@ class AdminDashboardActivity : BaseDrawerActivity() {
         setToolbarTitle("Admin Dashboard")
         setCheckedDrawerItem(R.id.m_admin)
         showLogoutOption(true)
-        updateUserFooterLabel()
+        syncAuthUi()
 
         bindViews()
         bindInteractions()
@@ -160,6 +163,7 @@ class AdminDashboardActivity : BaseDrawerActivity() {
         tvHeroTitle = findViewById(R.id.tvHeroTitle)
         tvHeroBody = findViewById(R.id.tvHeroBody)
         btnQuickRefresh = findViewById(R.id.btnQuickRefresh)
+        btnQuickServices = findViewById(R.id.btnQuickServices)
         btnQuickPortfolio = findViewById(R.id.btnQuickPortfolio)
         btnQuickBlog = findViewById(R.id.btnQuickBlog)
         btnOverviewTab = findViewById(R.id.btnOverviewTab)
@@ -170,6 +174,7 @@ class AdminDashboardActivity : BaseDrawerActivity() {
         tvMetricUpcomingBookings = findViewById(R.id.tvMetricUpcomingBookings)
         tvMetricScheduledRevenue = findViewById(R.id.tvMetricScheduledRevenue)
         tvMetricPendingReviews = findViewById(R.id.tvMetricPendingReviews)
+        cardPendingReviews = findViewById(R.id.cardPendingReviews)
         overviewSection = findViewById(R.id.overviewSection)
         analyticsSection = findViewById(R.id.analyticsSection)
         bookingsSection = findViewById(R.id.bookingsSection)
@@ -199,8 +204,18 @@ class AdminDashboardActivity : BaseDrawerActivity() {
             Toast.makeText(this, "Refreshing admin dashboard...", Toast.LENGTH_SHORT).show()
             loadDashboard()
         }
-        btnQuickPortfolio.setOnClickListener { startActivity(Intent(this, PortfolioActivity::class.java)) }
-        btnQuickBlog.setOnClickListener { startActivity(Intent(this, BlogActivity::class.java)) }
+        btnQuickServices.setOnClickListener {
+            startActivity(WebAdminActivity.intent(this, "Manage Services", "/admin/dashboard/services"))
+        }
+        btnQuickPortfolio.setOnClickListener {
+            startActivity(WebAdminActivity.intent(this, "Manage Portfolio", "/admin/dashboard/portfolio"))
+        }
+        btnQuickBlog.setOnClickListener {
+            startActivity(WebAdminActivity.intent(this, "Manage Blog", "/admin/dashboard/blog"))
+        }
+        cardPendingReviews.setOnClickListener {
+            startActivity(WebAdminActivity.intent(this, "Manage Reviews", "/admin/dashboard/testimonials"))
+        }
     }
 
     private fun requestedInitialView(): ViewMode {
@@ -212,15 +227,15 @@ class AdminDashboardActivity : BaseDrawerActivity() {
     }
 
     private fun ensureAdminSession(): Boolean {
-        if (AdminSession.isLoggedIn) {
+        if (AdminSession.isLoggedIn || AppSessionStore.activatePendingAdminSession()) {
             return true
         }
-        AdminSession.clear()
-        UserSession.clear()
-        startActivity(Intent(this, LoginActivity::class.java).apply {
-            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK)
-        })
-        finish()
+        navigateToLoginScreen {
+            putExtra(
+                LoginActivity.EXTRA_RESTORE_ADMIN_DASHBOARD_VIEW,
+                intent.getStringExtra(EXTRA_INITIAL_VIEW).orEmpty().ifBlank { ViewMode.OVERVIEW.name }
+            )
+        }
         return false
     }
 
@@ -260,6 +275,10 @@ class AdminDashboardActivity : BaseDrawerActivity() {
         }
 
         fun recordError(label: String, message: String) {
+            if (isSessionExpiredMessage(message)) {
+                runOnUiThread { handleSessionExpired(message) }
+                return
+            }
             synchronized(lock) {
                 state.errors.add("$label failed: $message")
             }
@@ -833,6 +852,9 @@ class AdminDashboardActivity : BaseDrawerActivity() {
             },
             onError = { message ->
                 runOnUiThread {
+                    if (handleSessionExpired(message)) {
+                        return@runOnUiThread
+                    }
                     Toast.makeText(this, "Failed to cancel appointment: $message", Toast.LENGTH_LONG).show()
                 }
             }
@@ -851,10 +873,25 @@ class AdminDashboardActivity : BaseDrawerActivity() {
             },
             onError = { message ->
                 runOnUiThread {
+                    if (handleSessionExpired(message)) {
+                        return@runOnUiThread
+                    }
                     Toast.makeText(this, "Failed to update appointment: $message", Toast.LENGTH_LONG).show()
                 }
             }
         )
+    }
+
+    private fun handleSessionExpired(message: String): Boolean {
+        if (redirectingToLogin || !isSessionExpiredMessage(message)) {
+            return false
+        }
+        redirectingToLogin = true
+        Toast.makeText(this, message, Toast.LENGTH_LONG).show()
+        navigateToLoginScreen {
+            putExtra(LoginActivity.EXTRA_RESTORE_ADMIN_DASHBOARD_VIEW, currentView.name)
+        }
+        return true
     }
 
     private fun parseAppointments(array: JSONArray): List<AdminAppointmentUi> {

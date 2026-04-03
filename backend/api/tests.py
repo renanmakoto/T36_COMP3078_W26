@@ -219,6 +219,28 @@ class BookingAvailabilityTests(TestCase):
 
         response = self.client.delete("/auth/account")
 
+
+class AuthenticationTests(TestCase):
+    def setUp(self):
+        self.client = APIClient()
+
+    def test_register_saves_phone_number(self):
+        response = self.client.post(
+            "/auth/register",
+            {
+                "email": "newuser@example.com",
+                "password": "Test1234!",
+                "display_name": "New User",
+                "phone": "+1 (437) 555-0123",
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 201)
+        user = User.objects.get(email="newuser@example.com")
+        self.assertEqual(user.phone, "+1 (437) 555-0123")
+        self.assertEqual(response.data["phone"], "+1 (437) 555-0123")
+
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.data["result"], "deleted")
         self.assertFalse(User.objects.filter(id=self.user.id).exists())

@@ -1,6 +1,7 @@
 package com.brazwebdes.hairstylistbooking
 
 import android.content.Intent
+import android.net.Uri
 import android.os.Bundle
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
@@ -13,14 +14,16 @@ class SignUpActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         binding = ActivitySignUpBinding.inflate(layoutInflater)
         setContentView(binding.root)
+        binding.toolbar.applyStatusBarTopInset()
 
         binding.btnCreateAccount.setOnClickListener {
             val displayName = binding.etName.text?.toString()?.trim().orEmpty()
+            val phone = binding.etPhone.text?.toString()?.trim().orEmpty()
             val email = binding.etEmail.text?.toString()?.trim().orEmpty()
             val password = binding.etPassword.text?.toString()?.trim().orEmpty()
 
-            if (displayName.isEmpty() || email.isEmpty() || password.isEmpty()) {
-                Toast.makeText(this, "Please fill in name, email, and password", Toast.LENGTH_SHORT).show()
+            if (displayName.isEmpty() || phone.isEmpty() || email.isEmpty() || password.isEmpty()) {
+                Toast.makeText(this, "Please fill in name, phone, email, and password", Toast.LENGTH_SHORT).show()
                 return@setOnClickListener
             }
             if (password.length < 8) {
@@ -31,7 +34,7 @@ class SignUpActivity : AppCompatActivity() {
             binding.btnCreateAccount.isEnabled = false
             binding.btnCreateAccount.text = "Creating..."
 
-            ApiClient.register(displayName, email, password,
+            ApiClient.register(displayName, phone, email, password,
                 onSuccess = {
                     runOnUiThread {
                         Toast.makeText(this, "Account created! Please sign in.", Toast.LENGTH_SHORT).show()
@@ -52,5 +55,14 @@ class SignUpActivity : AppCompatActivity() {
         }
 
         binding.toolbar.setNavigationOnClickListener { finish() }
+        binding.btnPrivacyPolicy.setOnClickListener { openExternalUrl(ApiClient.privacyPolicyUrl) }
+    }
+
+    private fun openExternalUrl(url: String) {
+        try {
+            startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
+        } catch (_: Exception) {
+            Toast.makeText(this, "Unable to open link", Toast.LENGTH_LONG).show()
+        }
     }
 }

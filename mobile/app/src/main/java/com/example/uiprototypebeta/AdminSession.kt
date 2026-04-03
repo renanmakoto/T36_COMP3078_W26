@@ -1,6 +1,6 @@
 package com.brazwebdes.hairstylistbooking
 
-/** Tracks whether an admin session is active. */
+/** Tracks whether an admin session is active in memory. */
 object AdminSession {
     var isLoggedIn: Boolean = false
     var displayName: String = ""
@@ -10,7 +10,5 @@ object AdminSession {
         isLoggedIn = false
         displayName = ""
         email = ""
-        ApiClient.accessToken = null
-        ApiClient.refreshToken = null
     }
 }

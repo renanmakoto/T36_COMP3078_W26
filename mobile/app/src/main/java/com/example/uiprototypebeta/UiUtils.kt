@@ -1,11 +1,19 @@
 package com.brazwebdes.hairstylistbooking
 
 import android.content.Context
+import android.content.Intent
 import android.util.TypedValue
+import android.view.View
+import androidx.appcompat.app.AppCompatActivity
+import androidx.core.view.ViewCompat
+import androidx.core.view.WindowInsetsCompat
+import androidx.core.view.updatePadding
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 import java.util.TimeZone
+
+private const val sessionExpiredError = "Session expired. Please sign in again."
 
 fun Context.dp(value: Int): Int {
     return TypedValue.applyDimension(
@@ -45,4 +53,30 @@ fun parseIsoDate(raw: String): Date? {
         }
     }
     return null
+}
+
+fun isSessionExpiredMessage(message: String): Boolean {
+    return message.trim() == sessionExpiredError
+}
+
+fun AppCompatActivity.navigateToLoginScreen(configureIntent: Intent.() -> Unit = {}) {
+    startActivity(
+        Intent(this, LoginActivity::class.java).apply {
+            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK)
+            configureIntent()
+        }
+    )
+    finish()
+}
+
+fun View.applyStatusBarTopInset() {
+    val initialTopPadding = paddingTop
+    ViewCompat.setOnApplyWindowInsetsListener(this) { view, insets ->
+        val topInset = insets.getInsets(
+            WindowInsetsCompat.Type.statusBars() or WindowInsetsCompat.Type.displayCutout()
+        ).top
+        view.updatePadding(top = initialTopPadding + topInset)
+        insets
+    }
+    ViewCompat.requestApplyInsets(this)
 }

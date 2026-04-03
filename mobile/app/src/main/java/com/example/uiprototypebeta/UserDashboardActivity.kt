@@ -1,6 +1,7 @@
 package com.brazwebdes.hairstylistbooking
 
 import android.content.Intent
+import android.net.Uri
 import android.graphics.Color
 import android.os.Bundle
 import android.util.TypedValue
@@ -11,6 +12,7 @@ import android.widget.LinearLayout
 import android.widget.ScrollView
 import android.widget.TextView
 import android.widget.Toast
+import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.widget.AppCompatButton
 import com.google.android.material.card.MaterialCardView
 import org.json.JSONArray
@@ -28,6 +30,8 @@ class UserDashboardActivity : BaseDrawerActivity() {
     private lateinit var upcomingContainer: ScrollView
     private lateinit var upcomingList: LinearLayout
     private lateinit var pastContainer: LinearLayout
+    private lateinit var btnPrivacyPolicy: Button
+    private lateinit var btnDeleteAccount: Button
 
     private val dateParserPatterns = listOf(
         "yyyy-MM-dd'T'HH:mm:ss.SSSXXX",
@@ -50,11 +54,15 @@ class UserDashboardActivity : BaseDrawerActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
+        if (!ensureUserSession()) {
+            return
+        }
+
         setContentLayout(R.layout.content_user)
         setToolbarTitle("My Bookings")
         setCheckedDrawerItem(R.id.m_user)
         showLogoutOption(true)
-        updateUserFooterLabel()
+        syncAuthUi()
 
         val tvGreeting: TextView = findViewById(R.id.tvGreeting)
         val tvDate: TextView = findViewById(R.id.tvDate)
@@ -65,6 +73,8 @@ class UserDashboardActivity : BaseDrawerActivity() {
         upcomingContainer = findViewById(R.id.upcomingContainer)
         upcomingList = findViewById(R.id.upcomingList)
         pastContainer = findViewById(R.id.pastContainer)
+        btnPrivacyPolicy = findViewById(R.id.btnPrivacyPolicy)
+        btnDeleteAccount = findViewById(R.id.btnDeleteAccount)
 
         val name = if (UserSession.displayName.isNotBlank()) UserSession.displayName else "Guest"
         tvGreeting.text = "Hi, $name"
@@ -88,6 +98,8 @@ class UserDashboardActivity : BaseDrawerActivity() {
             showPast()
             setActiveButton(btnPast, btnUpcoming)
         }
+        btnPrivacyPolicy.setOnClickListener { openPrivacyPolicy() }
+        btnDeleteAccount.setOnClickListener { confirmDeleteAccount() }
 
         setActiveButton(btnUpcoming, btnPast)
         showUpcoming()
@@ -97,9 +109,20 @@ class UserDashboardActivity : BaseDrawerActivity() {
 
     override fun onResume() {
         super.onResume()
+        if (!ensureUserSession()) {
+            return
+        }
         if (UserSession.isLoggedIn) {
             loadAppointments()
         }
+    }
+
+    private fun ensureUserSession(): Boolean {
+        if (UserSession.isLoggedIn || AppSessionStore.activatePendingUserSession()) {
+            return true
+        }
+        navigateToLoginScreen()
+        return false
     }
 
     private fun showUpcoming() {
@@ -131,6 +154,9 @@ class UserDashboardActivity : BaseDrawerActivity() {
             },
             onError = { msg ->
                 runOnUiThread {
+                    if (handleSessionExpired(msg)) {
+                        return@runOnUiThread
+                    }
                     tvNextBooking.text = "Unable to load"
                     Toast.makeText(this, "Failed to load appointments: $msg", Toast.LENGTH_LONG).show()
                 }
@@ -320,10 +346,76 @@ class UserDashboardActivity : BaseDrawerActivity() {
             },
             onError = { msg ->
                 runOnUiThread {
+                    if (handleSessionExpired(msg)) {
+                        return@runOnUiThread
+                    }
                     Toast.makeText(this, "Failed to cancel: $msg", Toast.LENGTH_LONG).show()
                 }
             }
         )
+    }
+
+    private fun openPrivacyPolicy() {
+        openExternalUrl(ApiClient.privacyPolicyUrl)
+    }
+
+    private fun confirmDeleteAccount() {
+        AlertDialog.Builder(this)
+            .setTitle("Delete account?")
+            .setMessage(
+                "This permanently removes your account and booking history from the app. " +
+                    "This action cannot be undone."
+            )
+            .setNegativeButton("Keep account", null)
+            .setPositiveButton("Delete") { _, _ ->
+                deleteAccount()
+            }
+            .show()
+    }
+
+    private fun deleteAccount() {
+        btnDeleteAccount.isEnabled = false
+        btnDeleteAccount.text = "Deleting..."
+        ApiClient.deleteAccount(
+            onSuccess = {
+                runOnUiThread {
+                    PendingBookingDraftStore.clear(this)
+                    AppSessionStore.clear(this)
+                    Toast.makeText(this, "Account deleted", Toast.LENGTH_LONG).show()
+                    startActivity(Intent(this, LoginActivity::class.java).apply {
+                        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK)
+                    })
+                    finish()
+                }
+            },
+            onError = { msg ->
+                runOnUiThread {
+                    if (handleSessionExpired(msg)) {
+                        return@runOnUiThread
+                    }
+                    btnDeleteAccount.isEnabled = true
+                    btnDeleteAccount.text = "Delete account"
+                    Toast.makeText(this, "Failed to delete account: $msg", Toast.LENGTH_LONG).show()
+                }
+            }
+        )
+    }
+
+    private fun handleSessionExpired(message: String): Boolean {
+        if (!isSessionExpiredMessage(message)) {
+            return false
+        }
+        Toast.makeText(this, message, Toast.LENGTH_LONG).show()
+        navigateToLoginScreen()
+        return true
+    }
+
+    private fun openExternalUrl(url: String) {
+        try {
+            startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
+        } catch (_: Exception) {
+            Toast.makeText(this, "Unable to open link", Toast.LENGTH_LONG).show()
+        }
     }
 
     private fun addEmptyState(container: LinearLayout, message: String) {

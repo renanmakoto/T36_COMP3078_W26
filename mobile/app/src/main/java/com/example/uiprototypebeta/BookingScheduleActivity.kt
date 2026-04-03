@@ -253,6 +253,9 @@ class BookingScheduleActivity : AppCompatActivity() {
                 },
                 onError = { message ->
                     runOnUiThread {
+                        if (handleSessionExpired(message, preserveDraft = false)) {
+                            return@runOnUiThread
+                        }
                         binding.btnConfirmSlot.isEnabled = true
                         binding.btnConfirmSlot.text = "Confirm new time"
                         Toast.makeText(this, "Failed: $message", Toast.LENGTH_LONG).show()
@@ -282,6 +285,9 @@ class BookingScheduleActivity : AppCompatActivity() {
                 },
                 onError = { message ->
                     runOnUiThread {
+                        if (handleSessionExpired(message, preserveDraft = true)) {
+                            return@runOnUiThread
+                        }
                         binding.btnConfirmSlot.isEnabled = true
                         binding.btnConfirmSlot.text = "Confirm booking"
                         Toast.makeText(this, "Failed: $message", Toast.LENGTH_LONG).show()
@@ -369,5 +375,30 @@ class BookingScheduleActivity : AppCompatActivity() {
         val period = if (hour >= 12) "PM" else "AM"
         if (hour == 0) hour = 12 else if (hour > 12) hour -= 12
         return "$hour:$minute $period"
+    }
+
+    private fun handleSessionExpired(message: String, preserveDraft: Boolean): Boolean {
+        if (!isSessionExpiredMessage(message)) {
+            return false
+        }
+        if (preserveDraft && !selectedDateKey.isNullOrBlank() && !selectedSlot.isNullOrBlank()) {
+            PendingBookingDraftStore.save(
+                this,
+                PendingBookingDraft(
+                    serviceId = serviceId,
+                    serviceTitle = serviceTitle,
+                    basePriceCents = basePriceCents,
+                    totalPriceCents = totalPriceCents,
+                    durationMinutes = serviceDuration,
+                    addOnIds = addOnIds,
+                    addOnNames = addOnNames,
+                    selectedDate = selectedDateKey.orEmpty(),
+                    selectedSlot = selectedSlot.orEmpty()
+                )
+            )
+        }
+        Toast.makeText(this, message, Toast.LENGTH_LONG).show()
+        navigateToLoginScreen()
+        return true
     }
 }

@@ -1,4 +1,5 @@
 const API = process.env.NEXT_PUBLIC_API_URL || '/api-proxy';
+const SESSION_CHANGE_EVENT = 'hb-session-change';
 
 function getAccessToken(): string | null {
   if (typeof window === 'undefined') return null;
@@ -18,6 +19,14 @@ export function setTokens(access: string, refresh: string) {
 export function clearTokens() {
   localStorage.removeItem('hb-access');
   localStorage.removeItem('hb-refresh');
+}
+
+export function clearSessionStorage() {
+  if (typeof window === 'undefined') return;
+  clearTokens();
+  localStorage.removeItem('hb-role');
+  localStorage.removeItem('hb-name');
+  window.dispatchEvent(new Event(SESSION_CHANGE_EVENT));
 }
 
 async function parseError(res: Response, fallback: string): Promise<string> {
@@ -56,8 +65,15 @@ async function authFetch(path: string, options: RequestInit = {}): Promise<Respo
         const data = await refreshRes.json();
         setTokens(data.access, refresh);
         res = await rawFetch(path, data.access, options);
+      } else {
+        clearSessionStorage();
       }
+    } else {
+      clearSessionStorage();
     }
+  }
+  if (res.status === 401) {
+    clearSessionStorage();
   }
   return res;
 }
@@ -66,6 +82,7 @@ export type UserData = {
   id: string;
   email: string;
   display_name: string;
+  phone: string;
   role: 'USER' | 'ADMIN';
 };
 
@@ -229,11 +246,11 @@ export async function apiLogin(email: string, password: string): Promise<LoginRe
   return res.json();
 }
 
-export async function apiRegister(email: string, password: string, displayName = ''): Promise<UserData> {
+export async function apiRegister(email: string, password: string, displayName = '', phone = ''): Promise<UserData> {
   const res = await fetch(`${API}/auth/register`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ email, password, display_name: displayName }),
+    body: JSON.stringify({ email, password, display_name: displayName, phone }),
   });
   if (!res.ok) {
     throw new Error(await parseError(res, 'Registration failed.'));
