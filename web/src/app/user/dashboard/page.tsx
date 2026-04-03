@@ -2,14 +2,34 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { apiCancelAppointment, apiGetMyAppointments, type AppointmentData } from '../../api';
+import { ActionDialog, DialogSummary } from '../../components/ActionDialog';
 import { useSession } from '../../session-context';
-import { apiGetMyAppointments, apiCancelAppointment, type AppointmentData } from '../../api';
+
+type AppointmentActionDialog =
+  | { kind: 'cancel'; appointment: ViewModel }
+  | { kind: 'reschedule'; appointment: ViewModel }
+  | null;
+
+type AppointmentResultDialog =
+  | {
+      kind: 'cancelled';
+      title: string;
+      description: string;
+      appointment: ViewModel;
+      tone: 'success' | 'danger';
+    }
+  | null;
 
 export default function UserDashboardPage() {
   const { isReady, role, displayName } = useSession();
   const router = useRouter();
   const [appointments, setAppointments] = useState<AppointmentData[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadingError, setLoadingError] = useState('');
+  const [actionDialog, setActionDialog] = useState<AppointmentActionDialog>(null);
+  const [resultDialog, setResultDialog] = useState<AppointmentResultDialog>(null);
+  const [actionBusy, setActionBusy] = useState(false);
 
   useEffect(() => {
     if (!isReady) return;
@@ -17,21 +37,16 @@ export default function UserDashboardPage() {
       router.replace('/login');
       return;
     }
+
+    setLoading(true);
+    setLoadingError('');
     apiGetMyAppointments()
       .then(setAppointments)
-      .catch(() => {})
+      .catch((error: unknown) => {
+        setLoadingError(error instanceof Error ? error.message : 'Failed to load appointments.');
+      })
       .finally(() => setLoading(false));
   }, [isReady, role, router]);
-
-  const handleCancel = useCallback(async (id: string) => {
-    if (!window.confirm('Are you sure you want to cancel this appointment?')) return;
-    try {
-      const updated = await apiCancelAppointment(id);
-      setAppointments((prev) => prev.map((a) => (a.id === id ? updated : a)));
-    } catch {
-      alert('Failed to cancel appointment.');
-    }
-  }, []);
 
   const userName = displayName || 'Client';
 
@@ -40,48 +55,81 @@ export default function UserDashboardPage() {
     const upcomingArr: ViewModel[] = [];
     const pastArr: ViewModel[] = [];
 
-    for (const a of appointments) {
-      const start = new Date(a.start_time);
+    for (const appointment of appointments) {
+      const start = new Date(appointment.start_time);
       const item: ViewModel = {
-        id: a.id,
+        id: appointment.id,
         rawStart: start,
         dateLabel: formatDateTime(start),
-        service: a.service.name,
-        price: `$${(a.total_price_cents / 100).toFixed(2)}`,
-        status: formatAppointmentStatus(a, start, now),
-        serviceId: a.service.id,
-        basePriceCents: a.service.price_cents,
-        totalPriceCents: a.total_price_cents,
-        durationMinutes: a.total_duration_minutes,
-        addOnIds: a.add_ons.map((item) => item.id),
-        addOnNames: a.add_ons.map((item) => item.name),
+        service: appointment.service.name,
+        price: `$${(appointment.total_price_cents / 100).toFixed(2)}`,
+        status: formatAppointmentStatus(appointment, start, now),
+        serviceId: appointment.service.id,
+        basePriceCents: appointment.service.price_cents,
+        totalPriceCents: appointment.total_price_cents,
+        durationMinutes: appointment.total_duration_minutes,
+        addOnIds: appointment.add_ons.map((item) => item.id),
+        addOnNames: appointment.add_ons.map((item) => item.name),
       };
-      if (start >= now && a.status !== 'CANCELLED') upcomingArr.push(item);
+      if (start >= now && appointment.status !== 'CANCELLED') upcomingArr.push(item);
       else pastArr.push(item);
     }
 
-    upcomingArr.sort((a, b) => a.rawStart.getTime() - b.rawStart.getTime());
-    pastArr.sort((a, b) => b.rawStart.getTime() - a.rawStart.getTime());
+    upcomingArr.sort((left, right) => left.rawStart.getTime() - right.rawStart.getTime());
+    pastArr.sort((left, right) => right.rawStart.getTime() - left.rawStart.getTime());
 
     return { upcoming: upcomingArr, past: pastArr };
   }, [appointments]);
 
   const calendarDays = useMemo(() => buildCalendarDays(appointments), [appointments]);
 
-  function handleReschedule(b: ViewModel) {
-    if (!window.confirm('Do you want to reschedule this appointment?')) return;
-    const params = new URLSearchParams({
-      rescheduleId: b.id,
-      serviceId: b.serviceId,
-      title: b.service,
-      basePrice: String(b.basePriceCents),
-      totalPrice: String(b.totalPriceCents),
-      duration: String(b.durationMinutes),
-      addOnIds: b.addOnIds.join(','),
-      addOnNames: b.addOnNames.join('|'),
-    });
-    router.push(`/book/schedule?${params.toString()}`);
-  }
+  const openCancelDialog = useCallback((appointment: ViewModel) => {
+    setActionDialog({ kind: 'cancel', appointment });
+  }, []);
+
+  const openRescheduleDialog = useCallback((appointment: ViewModel) => {
+    setActionDialog({ kind: 'reschedule', appointment });
+  }, []);
+
+  const confirmCancel = useCallback(async () => {
+    if (!actionDialog || actionDialog.kind !== 'cancel') return;
+
+    const currentAppointment = actionDialog.appointment;
+    setActionBusy(true);
+
+    try {
+      const updated = await apiCancelAppointment(currentAppointment.id);
+      setAppointments((current) => current.map((item) => (item.id === currentAppointment.id ? updated : item)));
+      setActionDialog(null);
+      setResultDialog({
+        kind: 'cancelled',
+        title: 'Booking cancelled',
+        description:
+          'Your appointment was removed from the upcoming list. A cancellation email should arrive shortly with the updated details.',
+        appointment: currentAppointment,
+        tone: 'success',
+      });
+    } catch (error: unknown) {
+      setActionDialog(null);
+      setResultDialog({
+        kind: 'cancelled',
+        title: 'Cancellation failed',
+        description: error instanceof Error ? error.message : 'Failed to cancel appointment.',
+        appointment: currentAppointment,
+        tone: 'danger',
+      });
+    } finally {
+      setActionBusy(false);
+    }
+  }, [actionDialog]);
+
+  const confirmReschedule = useCallback(() => {
+    if (!actionDialog || actionDialog.kind !== 'reschedule') return;
+
+    const appointment = actionDialog.appointment;
+    setActionDialog(null);
+    router.push(`/book/schedule?${buildRescheduleParams(appointment).toString()}`);
+  }, [actionDialog, router]);
 
   if (!isReady || role === 'guest') return null;
 
@@ -94,49 +142,171 @@ export default function UserDashboardPage() {
   }
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold text-[#0f0a1e]">Hi, {userName}</h1>
+    <>
+      <div className="space-y-6">
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-3xl font-bold text-[#0f0a1e]">Hi, {userName}</h1>
+          </div>
+          <button
+            onClick={() => router.push('/book')}
+            className="rounded-full bg-[#1a132f] px-4 py-2 text-white shadow-sm hover:brightness-110"
+          >
+            New booking
+          </button>
         </div>
-        <button
-          onClick={() => router.push('/book')}
-          className="rounded-full bg-[#1a132f] px-4 py-2 text-white shadow-sm hover:brightness-110"
-        >
-          New booking
-        </button>
+
+        {loadingError ? (
+          <div className="rounded-2xl bg-red-50 px-4 py-3 text-sm font-semibold text-red-700">{loadingError}</div>
+        ) : null}
+
+        <div className="grid gap-6 md:grid-cols-2">
+          <Card title="Upcoming">
+            {upcoming.length === 0 ? (
+              <p className="text-sm text-[#7b7794]">No upcoming bookings yet.</p>
+            ) : (
+              upcoming.map((appointment) => (
+                <BookingRow
+                  key={appointment.id}
+                  {...appointment}
+                  onCancel={() => openCancelDialog(appointment)}
+                  onReschedule={() => openRescheduleDialog(appointment)}
+                />
+              ))
+            )}
+          </Card>
+          <Card title="History">
+            {past.length === 0 ? (
+              <p className="text-sm text-[#7b7794]">No past bookings yet.</p>
+            ) : (
+              past.map((appointment) => <BookingRow key={appointment.id} {...appointment} />)
+            )}
+          </Card>
+        </div>
+
+        <div className="rounded-3xl bg-white p-6 shadow-sm">
+          <h2 className="text-xl font-semibold text-[#0f0a1e]">30-day booking view</h2>
+          <p className="text-sm text-[#5a5872]">Next 30 days of your bookings, grouped so busy days stay readable.</p>
+          <UserCalendar days={calendarDays} />
+        </div>
       </div>
 
-      <div className="grid gap-6 md:grid-cols-2">
-        <Card title="Upcoming">
-          {upcoming.length === 0 ? (
-            <p className="text-sm text-[#7b7794]">No upcoming bookings yet.</p>
-          ) : (
-            upcoming.map((b) => (
-              <BookingRow
-                key={b.id}
-                {...b}
-                onCancel={() => handleCancel(b.id)}
-                onReschedule={() => handleReschedule(b)}
-              />
-            ))
-          )}
-        </Card>
-        <Card title="History">
-          {past.length === 0 ? (
-            <p className="text-sm text-[#7b7794]">No past bookings yet.</p>
-          ) : (
-            past.map((b) => <BookingRow key={b.id} {...b} />)
-          )}
-        </Card>
-      </div>
+      <ActionDialog
+        open={actionDialog?.kind === 'cancel'}
+        eyebrow="Upcoming booking"
+        title="Cancel this appointment?"
+        description="This will release the time slot and move the booking into your history. We will keep the rest of your account data unchanged."
+        tone="danger"
+        onClose={actionBusy ? undefined : () => setActionDialog(null)}
+        closeLabel="Back"
+        actions={
+          <>
+            <button
+              type="button"
+              onClick={confirmCancel}
+              disabled={actionBusy}
+              className="w-full rounded-xl bg-[#b42318] px-4 py-3 text-sm font-semibold text-white shadow-sm transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-70"
+            >
+              {actionBusy ? 'Cancelling...' : 'Yes, cancel booking'}
+            </button>
+            <button
+              type="button"
+              onClick={() => setActionDialog(null)}
+              disabled={actionBusy}
+              className="w-full rounded-xl border border-[#e2d5d8] px-4 py-3 text-sm font-semibold text-[#6d4250] transition hover:bg-white disabled:cursor-not-allowed disabled:opacity-70"
+            >
+              Keep booking
+            </button>
+          </>
+        }
+      >
+        {actionDialog?.kind === 'cancel' ? (
+          <DialogSummary
+            title={actionDialog.appointment.service}
+            lines={[actionDialog.appointment.dateLabel, actionDialog.appointment.price]}
+          />
+        ) : null}
+      </ActionDialog>
 
-      <div className="rounded-3xl bg-white p-6 shadow-sm">
-        <h2 className="text-xl font-semibold text-[#0f0a1e]">30-day booking view</h2>
-        <p className="text-sm text-[#5a5872]">Next 30 days of your bookings, grouped so busy days stay readable.</p>
-        <UserCalendar days={calendarDays} />
-      </div>
-    </div>
+      <ActionDialog
+        open={actionDialog?.kind === 'reschedule'}
+        eyebrow="Upcoming booking"
+        title="Reschedule this appointment?"
+        description="You will keep this booking until you choose and confirm a new date or time. The next screen will open the schedule with this service already loaded."
+        onClose={() => setActionDialog(null)}
+        closeLabel="Back"
+        actions={
+          <>
+            <button
+              type="button"
+              onClick={confirmReschedule}
+              className="w-full rounded-xl bg-[#1a132f] px-4 py-3 text-sm font-semibold text-white shadow-sm transition hover:brightness-110"
+            >
+              Choose a new time
+            </button>
+            <button
+              type="button"
+              onClick={() => setActionDialog(null)}
+              className="w-full rounded-xl border border-[#1a132f] px-4 py-3 text-sm font-semibold text-[#1a132f] transition hover:bg-[#f6f6f6]"
+            >
+              Keep current booking
+            </button>
+          </>
+        }
+      >
+        {actionDialog?.kind === 'reschedule' ? (
+          <DialogSummary
+            title={actionDialog.appointment.service}
+            lines={[actionDialog.appointment.dateLabel, actionDialog.appointment.price]}
+          />
+        ) : null}
+      </ActionDialog>
+
+      <ActionDialog
+        open={Boolean(resultDialog)}
+        eyebrow={resultDialog?.tone === 'success' ? 'Updated' : 'Try again'}
+        title={resultDialog?.title ?? ''}
+        description={resultDialog?.description ?? ''}
+        tone={resultDialog?.tone ?? 'default'}
+        onClose={() => setResultDialog(null)}
+        closeLabel="Close"
+        actions={
+          resultDialog?.tone === 'success' ? (
+            <>
+              <button
+                type="button"
+                onClick={() => setResultDialog(null)}
+                className="w-full rounded-xl bg-[#1a132f] px-4 py-3 text-sm font-semibold text-white shadow-sm transition hover:brightness-110"
+              >
+                Done
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setResultDialog(null);
+                  router.push('/book');
+                }}
+                className="w-full rounded-xl border border-[#1a132f] px-4 py-3 text-sm font-semibold text-[#1a132f] transition hover:bg-[#f6f6f6]"
+              >
+                Book another service
+              </button>
+            </>
+          ) : (
+            <button
+              type="button"
+              onClick={() => setResultDialog(null)}
+              className="w-full rounded-xl bg-[#1a132f] px-4 py-3 text-sm font-semibold text-white shadow-sm transition hover:brightness-110"
+            >
+              Close
+            </button>
+          )
+        }
+      >
+        {resultDialog ? (
+          <DialogSummary title={resultDialog.appointment.service} lines={[resultDialog.appointment.dateLabel]} />
+        ) : null}
+      </ActionDialog>
+    </>
   );
 }
 
@@ -185,7 +355,7 @@ function BookingRow({
           <p className="text-sm text-[#7b7794]">{status}</p>
           <p className="text-lg font-bold text-[#1a132f]">{price}</p>
         </div>
-        {onCancel && onReschedule && (status === 'Confirmed' || status === 'Pending') && (
+        {onCancel && onReschedule && (status === 'Confirmed' || status === 'Pending') ? (
           <div className="flex flex-col gap-1">
             <button
               onClick={onReschedule}
@@ -200,10 +370,23 @@ function BookingRow({
               Cancel
             </button>
           </div>
-        )}
+        ) : null}
       </div>
     </div>
   );
+}
+
+function buildRescheduleParams(booking: ViewModel) {
+  return new URLSearchParams({
+    rescheduleId: booking.id,
+    serviceId: booking.serviceId,
+    title: booking.service,
+    basePrice: String(booking.basePriceCents),
+    totalPrice: String(booking.totalPriceCents),
+    duration: String(booking.durationMinutes),
+    addOnIds: booking.addOnIds.join(','),
+    addOnNames: booking.addOnNames.join('|'),
+  });
 }
 
 function formatDateTime(date: Date) {
@@ -240,10 +423,14 @@ function buildCalendarDays(appointments: AppointmentData[]): CalendarDay[] {
   for (let i = 0; i < 30; i++) {
     const day = addDays(start, i);
     const items = appointments
-      .filter((a) => a.status !== 'CANCELLED')
-      .map((a) => ({ id: a.id, dateObj: new Date(a.start_time), service: a.service.name }))
-      .filter((a) => isSameDate(a.dateObj, day))
-      .map((a) => ({ id: a.id, start: a.dateObj, service: a.service }));
+      .filter((appointment) => appointment.status !== 'CANCELLED')
+      .map((appointment) => ({
+        id: appointment.id,
+        dateObj: new Date(appointment.start_time),
+        service: appointment.service.name,
+      }))
+      .filter((appointment) => isSameDate(appointment.dateObj, day))
+      .map((appointment) => ({ id: appointment.id, start: appointment.dateObj, service: appointment.service }));
 
     days.push({ date: day, items });
   }
@@ -268,15 +455,15 @@ function UserCalendar({ days }: { days: CalendarDay[] }) {
             <p className="mt-2 text-xs text-[#b0afc4]">No bookings</p>
           ) : (
             <div className="mt-2 space-y-1">
-              {day.items.slice(0, 2).map((b) => (
-                <div key={b.id} className="rounded-lg bg-[#f1eefc] px-2 py-1">
+              {day.items.slice(0, 2).map((booking) => (
+                <div key={booking.id} className="rounded-lg bg-[#f1eefc] px-2 py-1">
                   <p className="text-xs font-semibold text-[#1a132f]">
                     {new Intl.DateTimeFormat('en-US', {
                       hour: 'numeric',
                       minute: '2-digit',
                       timeZone: 'America/Toronto',
-                    }).format(b.start)}{' '}
-                    &middot; {b.service}
+                    }).format(booking.start)}{' '}
+                    &middot; {booking.service}
                   </p>
                 </div>
               ))}
@@ -292,17 +479,21 @@ function UserCalendar({ days }: { days: CalendarDay[] }) {
 }
 
 function startOfDay(date: Date) {
-  const d = new Date(date);
-  d.setHours(0, 0, 0, 0);
-  return d;
+  const next = new Date(date);
+  next.setHours(0, 0, 0, 0);
+  return next;
 }
 
 function addDays(date: Date, days: number) {
-  const d = new Date(date);
-  d.setDate(d.getDate() + days);
-  return d;
+  const next = new Date(date);
+  next.setDate(next.getDate() + days);
+  return next;
 }
 
-function isSameDate(a: Date, b: Date) {
-  return a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
+function isSameDate(left: Date, right: Date) {
+  return (
+    left.getFullYear() === right.getFullYear() &&
+    left.getMonth() === right.getMonth() &&
+    left.getDate() === right.getDate()
+  );
 }
