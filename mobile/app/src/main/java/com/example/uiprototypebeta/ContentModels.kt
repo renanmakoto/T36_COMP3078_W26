@@ -147,7 +147,7 @@ fun JSONObject.toPost(): Post {
     )
 }
 
-private fun JSONArray.toAddOnOptions(): List<AddOnOption> {
+fun JSONArray.toAddOnOptions(): List<AddOnOption> {
     val items = mutableListOf<AddOnOption>()
     for (index in 0 until length()) {
         val item = optJSONObject(index) ?: continue
