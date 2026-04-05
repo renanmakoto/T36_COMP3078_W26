@@ -217,12 +217,6 @@ export type AdminTestimonialData = TestimonialData & {
   updated_at: string;
 };
 
-export type AdminDeleteServiceResult = {
-  result: 'deleted' | 'archived';
-  detail: string;
-  appointment_count?: number;
-};
-
 export async function apiLogin(email: string, password: string): Promise<LoginResult> {
   const res = await fetch(`${API}/auth/login`, {
     method: 'POST',
@@ -478,12 +472,11 @@ export async function apiUpdateAdminService(id: string, payload: Record<string, 
   return res.json();
 }
 
-export async function apiDeleteAdminService(id: string): Promise<AdminDeleteServiceResult> {
+export async function apiDeleteAdminService(id: string): Promise<void> {
   const res = await authFetch(`/admin/services/${id}`, {
     method: 'DELETE',
   });
   if (!res.ok) throw new Error(await parseError(res, 'Failed to delete service.'));
-  return res.json();
 }
 
 export async function apiGetAdminAddOns(): Promise<AdminAddOnData[]> {

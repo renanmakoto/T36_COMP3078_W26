@@ -35,7 +35,7 @@
                 android:minHeight="36dp"
                 android:insetTop="0dp"
                 android:insetBottom="0dp"
-                android:text="Manage blog"
+                android:text="Admin dashboard"
                 android:textAllCaps="false"
                 android:textSize="12sp"
                 android:visibility="gone" />

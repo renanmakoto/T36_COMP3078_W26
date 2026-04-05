@@ -3,7 +3,6 @@ package com.brazwebdes.hairstylistbooking
 import okhttp3.Call
 import okhttp3.Callback
 import okhttp3.MediaType.Companion.toMediaType
-import okhttp3.MultipartBody
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Response
@@ -253,174 +252,6 @@ object ApiClient {
         get("/admin/analytics/no-show-rate", authenticated = true, onSuccess = onSuccess, onError = onError)
     }
 
-    fun getAdminServices(
-        onSuccess: (JSONArray) -> Unit,
-        onError: (String) -> Unit
-    ) {
-        getArray("/admin/services", authenticated = true, onSuccess = onSuccess, onError = onError)
-    }
-
-    fun createAdminService(
-        body: JSONObject,
-        onSuccess: (JSONObject) -> Unit,
-        onError: (String) -> Unit
-    ) {
-        post("/admin/services", body, authenticated = true, onSuccess = onSuccess, onError = onError)
-    }
-
-    fun updateAdminService(
-        id: String,
-        body: JSONObject,
-        onSuccess: (JSONObject) -> Unit,
-        onError: (String) -> Unit
-    ) {
-        patch("/admin/services/$id", body, onSuccess = onSuccess, onError = onError)
-    }
-
-    fun deleteAdminService(
-        id: String,
-        onSuccess: () -> Unit,
-        onError: (String) -> Unit
-    ) {
-        delete("/admin/services/$id", onSuccess = onSuccess, onError = onError)
-    }
-
-    fun getAdminAddOns(
-        onSuccess: (JSONArray) -> Unit,
-        onError: (String) -> Unit
-    ) {
-        getArray("/admin/add-ons", authenticated = true, onSuccess = onSuccess, onError = onError)
-    }
-
-    fun createAdminAddOn(
-        body: JSONObject,
-        onSuccess: (JSONObject) -> Unit,
-        onError: (String) -> Unit
-    ) {
-        post("/admin/add-ons", body, authenticated = true, onSuccess = onSuccess, onError = onError)
-    }
-
-    fun updateAdminAddOn(
-        id: String,
-        body: JSONObject,
-        onSuccess: (JSONObject) -> Unit,
-        onError: (String) -> Unit
-    ) {
-        patch("/admin/add-ons/$id", body, onSuccess = onSuccess, onError = onError)
-    }
-
-    fun deleteAdminAddOn(
-        id: String,
-        onSuccess: () -> Unit,
-        onError: (String) -> Unit
-    ) {
-        delete("/admin/add-ons/$id", onSuccess = onSuccess, onError = onError)
-    }
-
-    fun getAdminPortfolioItems(
-        onSuccess: (JSONArray) -> Unit,
-        onError: (String) -> Unit
-    ) {
-        getArray("/admin/portfolio-items", authenticated = true, onSuccess = onSuccess, onError = onError)
-    }
-
-    fun createAdminPortfolioItem(
-        body: JSONObject,
-        onSuccess: (JSONObject) -> Unit,
-        onError: (String) -> Unit
-    ) {
-        post("/admin/portfolio-items", body, authenticated = true, onSuccess = onSuccess, onError = onError)
-    }
-
-    fun updateAdminPortfolioItem(
-        id: String,
-        body: JSONObject,
-        onSuccess: (JSONObject) -> Unit,
-        onError: (String) -> Unit
-    ) {
-        patch("/admin/portfolio-items/$id", body, onSuccess = onSuccess, onError = onError)
-    }
-
-    fun deleteAdminPortfolioItem(
-        id: String,
-        onSuccess: () -> Unit,
-        onError: (String) -> Unit
-    ) {
-        delete("/admin/portfolio-items/$id", onSuccess = onSuccess, onError = onError)
-    }
-
-    fun getAdminBlogPosts(
-        onSuccess: (JSONArray) -> Unit,
-        onError: (String) -> Unit
-    ) {
-        getArray("/admin/blog-posts", authenticated = true, onSuccess = onSuccess, onError = onError)
-    }
-
-    fun createAdminBlogPost(
-        body: JSONObject,
-        onSuccess: (JSONObject) -> Unit,
-        onError: (String) -> Unit
-    ) {
-        post("/admin/blog-posts", body, authenticated = true, onSuccess = onSuccess, onError = onError)
-    }
-
-    fun updateAdminBlogPost(
-        id: String,
-        body: JSONObject,
-        onSuccess: (JSONObject) -> Unit,
-        onError: (String) -> Unit
-    ) {
-        patch("/admin/blog-posts/$id", body, onSuccess = onSuccess, onError = onError)
-    }
-
-    fun deleteAdminBlogPost(
-        id: String,
-        onSuccess: () -> Unit,
-        onError: (String) -> Unit
-    ) {
-        delete("/admin/blog-posts/$id", onSuccess = onSuccess, onError = onError)
-    }
-
-    fun updateAdminTestimonial(
-        id: String,
-        body: JSONObject,
-        onSuccess: (JSONObject) -> Unit,
-        onError: (String) -> Unit
-    ) {
-        patch("/admin/testimonials/$id", body, onSuccess = onSuccess, onError = onError)
-    }
-
-    fun uploadAdminImage(
-        fileName: String,
-        contentType: String,
-        bytes: ByteArray,
-        kind: String,
-        onSuccess: (JSONObject) -> Unit,
-        onError: (String) -> Unit
-    ) {
-        enqueueJsonRequest(
-            authenticated = true,
-            buildRequest = { token ->
-                val body = MultipartBody.Builder()
-                    .setType(MultipartBody.FORM)
-                    .addFormDataPart("kind", kind)
-                    .addFormDataPart(
-                        "file",
-                        fileName,
-                        bytes.toRequestBody(contentType.toMediaType())
-                    )
-                    .build()
-                Request.Builder()
-                    .url(url("/admin/uploads/image"))
-                    .post(body)
-                    .applyAuthHeader(token, authenticated = true)
-                    .build()
-            },
-            onSuccess = onSuccess,
-            onError = onError
-        )
-    }
-
     private fun get(
         path: String,
         authenticated: Boolean,
@@ -498,25 +329,6 @@ object ApiClient {
                     .build()
             },
             onSuccess = onSuccess,
-            onError = onError
-        )
-    }
-
-    private fun delete(
-        path: String,
-        onSuccess: () -> Unit,
-        onError: (String) -> Unit
-    ) {
-        performRequest(
-            authenticated = true,
-            buildRequest = { token ->
-                Request.Builder()
-                    .url(url(path))
-                    .delete()
-                    .applyAuthHeader(token, authenticated = true)
-                    .build()
-            },
-            handleBody = { onSuccess() },
             onError = onError
         )
     }

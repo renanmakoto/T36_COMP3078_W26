@@ -19,7 +19,6 @@ class BookingActivity : BaseDrawerActivity() {
     private lateinit var addOnsContainer: LinearLayout
     private lateinit var summaryText: TextView
     private lateinit var confirmButton: MaterialButton
-    private lateinit var manageServicesButton: MaterialButton
 
     private var services: List<ServiceOption> = emptyList()
     private var selectedServiceId: String? = null
@@ -35,12 +34,6 @@ class BookingActivity : BaseDrawerActivity() {
         addOnsContainer = findViewById(R.id.llAddOns)
         summaryText = findViewById(R.id.tvSummary)
         confirmButton = findViewById(R.id.btnConfirm)
-        manageServicesButton = findViewById(R.id.btnManageServices)
-
-        manageServicesButton.visibility = if (AdminSession.isLoggedIn) android.view.View.VISIBLE else android.view.View.GONE
-        manageServicesButton.setOnClickListener {
-            startActivity(Intent(this, AdminServicesActivity::class.java))
-        }
 
         confirmButton.setOnClickListener {
             val service = selectedService() ?: return@setOnClickListener
@@ -57,11 +50,6 @@ class BookingActivity : BaseDrawerActivity() {
         }
 
         loadServices()
-    }
-
-    override fun onResume() {
-        super.onResume()
-        manageServicesButton.visibility = if (AdminSession.isLoggedIn) android.view.View.VISIBLE else android.view.View.GONE
     }
 
     private fun loadServices() {

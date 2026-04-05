@@ -29,35 +29,14 @@
             android:textColor="@color/brand_muted"
             android:textSize="14sp" />
 
-        <LinearLayout
-            android:layout_width="match_parent"
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btnManagePortfolio"
+            android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:layout_marginTop="12dp"
-            android:orientation="horizontal">
-
-            <com.google.android.material.button.MaterialButton
-                android:id="@+id/btnManagePortfolio"
-                android:layout_width="0dp"
-                android:layout_height="wrap_content"
-                android:layout_weight="1"
-                android:text="Manage portfolio"
-                android:textAllCaps="false"
-                android:visibility="gone" />
-
-            <Space
-                android:layout_width="12dp"
-                android:layout_height="1dp" />
-
-            <com.google.android.material.button.MaterialButton
-                android:id="@+id/btnManageTestimonials"
-                style="@style/Widget.MaterialComponents.Button.OutlinedButton"
-                android:layout_width="0dp"
-                android:layout_height="wrap_content"
-                android:layout_weight="1"
-                android:text="Moderate reviews"
-                android:textAllCaps="false"
-                android:visibility="gone" />
-        </LinearLayout>
+            android:text="Admin dashboard"
+            android:textAllCaps="false"
+            android:visibility="gone" />
 
         <LinearLayout
             android:id="@+id/llPortfolioItems"

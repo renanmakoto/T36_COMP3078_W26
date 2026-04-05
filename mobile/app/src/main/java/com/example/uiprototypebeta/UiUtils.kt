@@ -1,11 +1,7 @@
 package com.brazwebdes.hairstylistbooking
 
 import android.content.Context
-import android.content.Intent
-import android.net.Uri
-import android.provider.OpenableColumns
 import android.util.TypedValue
-import androidx.appcompat.app.AppCompatActivity
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -49,44 +45,4 @@ fun parseIsoDate(raw: String): Date? {
         }
     }
     return null
-}
-
-data class UploadContent(
-    val fileName: String,
-    val mimeType: String,
-    val bytes: ByteArray,
-)
-
-fun AppCompatActivity.requireAdminSession(): Boolean {
-    if (AdminSession.isLoggedIn) {
-        return true
-    }
-    AdminSession.clear()
-    UserSession.clear()
-    startActivity(Intent(this, LoginActivity::class.java).apply {
-        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK)
-    })
-    finish()
-    return false
-}
-
-fun Context.readUploadContent(uri: Uri): UploadContent? {
-    return try {
-        val contentResolver = contentResolver
-        val mimeType = contentResolver.getType(uri).orEmpty().ifBlank { "application/octet-stream" }
-        val fileName = queryDisplayName(uri)
-            ?: "upload-${System.currentTimeMillis()}.${mimeType.substringAfter('/', "bin")}"
-        val bytes = contentResolver.openInputStream(uri)?.use { stream -> stream.readBytes() } ?: return null
-        UploadContent(fileName = fileName, mimeType = mimeType, bytes = bytes)
-    } catch (_: Exception) {
-        null
-    }
-}
-
-private fun Context.queryDisplayName(uri: Uri): String? {
-    return contentResolver.query(uri, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null)?.use { cursor ->
-        if (!cursor.moveToFirst()) return@use null
-        val columnIndex = cursor.getColumnIndex(OpenableColumns.DISPLAY_NAME)
-        if (columnIndex < 0) null else cursor.getString(columnIndex)
-    }
 }

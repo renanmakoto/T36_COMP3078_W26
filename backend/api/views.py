@@ -609,41 +609,6 @@ class AdminServiceDetailView(generics.RetrieveUpdateDestroyAPIView):
     permission_classes = [IsAuthenticated, IsAdmin]
     queryset = Service.objects.prefetch_related("available_add_ons")
 
-    def destroy(self, request, *args, **kwargs):
-        service = self.get_object()
-        appointment_count = Appointment.objects.filter(service=service).count()
-        if appointment_count > 0:
-            update_fields: list[str] = []
-            if service.is_active:
-                service.is_active = False
-                update_fields.append("is_active")
-            if service.is_featured_home:
-                service.is_featured_home = False
-                update_fields.append("is_featured_home")
-            if service.home_order != 0:
-                service.home_order = 0
-                update_fields.append("home_order")
-            if update_fields:
-                service.save(update_fields=update_fields)
-
-            return Response(
-                {
-                    "result": "archived",
-                    "detail": "Service has related bookings and was archived instead of deleted.",
-                    "appointment_count": appointment_count,
-                },
-                status=status.HTTP_200_OK,
-            )
-
-        self.perform_destroy(service)
-        return Response(
-            {
-                "result": "deleted",
-                "detail": "Service deleted.",
-            },
-            status=status.HTTP_200_OK,
-        )
-
 
 class AdminAddOnListCreateView(generics.ListCreateAPIView):
     serializer_class = AddOnAdminSerializer

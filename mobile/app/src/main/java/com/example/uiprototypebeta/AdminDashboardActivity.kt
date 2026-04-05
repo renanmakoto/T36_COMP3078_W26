@@ -85,8 +85,6 @@ class AdminDashboardActivity : BaseDrawerActivity() {
     private lateinit var tvHeroTitle: TextView
     private lateinit var tvHeroBody: TextView
     private lateinit var btnQuickRefresh: MaterialButton
-    private lateinit var btnQuickServices: MaterialButton
-    private lateinit var btnQuickReviews: MaterialButton
     private lateinit var btnQuickPortfolio: MaterialButton
     private lateinit var btnQuickBlog: MaterialButton
     private lateinit var btnOverviewTab: Button
@@ -162,6 +160,8 @@ class AdminDashboardActivity : BaseDrawerActivity() {
         tvHeroTitle = findViewById(R.id.tvHeroTitle)
         tvHeroBody = findViewById(R.id.tvHeroBody)
         btnQuickRefresh = findViewById(R.id.btnQuickRefresh)
+        btnQuickPortfolio = findViewById(R.id.btnQuickPortfolio)
+        btnQuickBlog = findViewById(R.id.btnQuickBlog)
         btnOverviewTab = findViewById(R.id.btnOverviewTab)
         btnAnalyticsTab = findViewById(R.id.btnAnalyticsTab)
         btnBookingsTab = findViewById(R.id.btnBookingsTab)
@@ -188,10 +188,6 @@ class AdminDashboardActivity : BaseDrawerActivity() {
         analyticsTopServicesContainer = findViewById(R.id.analyticsTopServicesContainer)
         analyticsDailyBookingsContainer = findViewById(R.id.analyticsDailyBookingsContainer)
         analyticsMonthlyBookingsContainer = findViewById(R.id.analyticsMonthlyBookingsContainer)
-        btnQuickServices = findViewById(R.id.btnQuickServices)
-        btnQuickReviews = findViewById(R.id.btnQuickReviews)
-        btnQuickPortfolio = findViewById(R.id.btnQuickPortfolio)
-        btnQuickBlog = findViewById(R.id.btnQuickBlog)
     }
 
     private fun bindInteractions() {
@@ -203,10 +199,8 @@ class AdminDashboardActivity : BaseDrawerActivity() {
             Toast.makeText(this, "Refreshing admin dashboard...", Toast.LENGTH_SHORT).show()
             loadDashboard()
         }
-        btnQuickServices.setOnClickListener { startActivity(Intent(this, AdminServicesActivity::class.java)) }
-        btnQuickReviews.setOnClickListener { startActivity(Intent(this, AdminTestimonialsActivity::class.java)) }
-        btnQuickPortfolio.setOnClickListener { startActivity(Intent(this, AdminPortfolioManageActivity::class.java)) }
-        btnQuickBlog.setOnClickListener { startActivity(Intent(this, AdminBlogManageActivity::class.java)) }
+        btnQuickPortfolio.setOnClickListener { startActivity(Intent(this, PortfolioActivity::class.java)) }
+        btnQuickBlog.setOnClickListener { startActivity(Intent(this, BlogActivity::class.java)) }
     }
 
     private fun requestedInitialView(): ViewMode {

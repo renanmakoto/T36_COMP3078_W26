@@ -259,46 +259,8 @@ class AdminContentManagementTests(TestCase):
 
         response = self.client.delete(f"/admin/services/{service.id}")
 
-        self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.data["result"], "deleted")
+        self.assertEqual(response.status_code, 204)
         self.assertFalse(Service.objects.filter(id=service.id).exists())
-
-    def test_admin_archives_service_with_related_appointments(self):
-        service = Service.objects.create(
-            name="Haircut",
-            description="Standard service",
-            duration_minutes=45,
-            price_cents=5000,
-            is_active=True,
-            is_featured_home=True,
-            home_order=2,
-        )
-        customer = User.objects.create_user(
-            email="client@example.com",
-            password="Test1234!",
-            display_name="Client",
-            role=User.Role.USER,
-        )
-        Appointment.objects.create(
-            user=customer,
-            service=service,
-            start_time=timezone.make_aware(datetime(2026, 4, 6, 10, 0), timezone.get_current_timezone()),
-            end_time=timezone.make_aware(datetime(2026, 4, 6, 10, 45), timezone.get_current_timezone()),
-            total_price_cents=5000,
-            total_duration_minutes=45,
-            status=AppointmentStatus.CONFIRMED,
-        )
-
-        response = self.client.delete(f"/admin/services/{service.id}")
-
-        self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.data["result"], "archived")
-        service.refresh_from_db()
-        self.assertFalse(service.is_active)
-        self.assertFalse(service.is_featured_home)
-        self.assertEqual(service.home_order, 0)
-        self.assertFalse(Service.objects.filter(id=service.id, is_active=True).exists())
-        self.assertEqual(Appointment.objects.filter(service=service).count(), 1)
 
     def test_admin_can_delete_add_on(self):
         addon = AddOn.objects.create(

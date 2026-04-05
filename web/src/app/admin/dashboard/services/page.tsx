@@ -236,11 +236,7 @@ export default function AdminServicesPage() {
   }
 
   async function handleDeleteService(service: AdminServiceData) {
-    if (
-      !window.confirm(
-        `Delete service "${service.name}"? If it already has bookings, it will be archived instead of fully deleted.`,
-      )
-    ) {
+    if (!window.confirm(`Delete service "${service.name}"? Existing appointments may block this action.`)) {
       return;
     }
 
@@ -248,11 +244,11 @@ export default function AdminServicesPage() {
     setError('');
     setNotice('');
     try {
-      const result = await apiDeleteAdminService(service.id);
+      await apiDeleteAdminService(service.id);
       if (editingServiceId === service.id) {
         resetServiceForm();
       }
-      setNotice(result.detail);
+      setNotice('Service deleted.');
       await loadData();
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Failed to delete service.');

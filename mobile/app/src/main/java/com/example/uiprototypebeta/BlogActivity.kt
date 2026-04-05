@@ -29,7 +29,7 @@ class BlogActivity : BaseDrawerActivity() {
 
         manageButton.visibility = if (AdminSession.isLoggedIn) View.VISIBLE else View.GONE
         manageButton.setOnClickListener {
-            startActivity(Intent(this, AdminBlogManageActivity::class.java))
+            startActivity(AdminDashboardActivity.intent(this, initialView = AdminDashboardActivity.ViewMode.ANALYTICS))
         }
 
         loadPosts()

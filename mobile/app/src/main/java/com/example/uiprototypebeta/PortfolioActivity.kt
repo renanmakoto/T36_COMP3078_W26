@@ -22,7 +22,6 @@ class PortfolioActivity : BaseDrawerActivity() {
     private lateinit var testimonialsContainer: LinearLayout
     private lateinit var viewMoreTestimonialsButton: MaterialButton
     private lateinit var manageButton: MaterialButton
-    private lateinit var manageTestimonialsButton: MaterialButton
     private lateinit var authorInput: TextInputEditText
     private lateinit var testimonialInput: TextInputEditText
     private lateinit var serviceSpinner: Spinner
@@ -45,7 +44,6 @@ class PortfolioActivity : BaseDrawerActivity() {
         testimonialsContainer = findViewById(R.id.llTestimonials)
         viewMoreTestimonialsButton = findViewById(R.id.btnViewMoreTestimonials)
         manageButton = findViewById(R.id.btnManagePortfolio)
-        manageTestimonialsButton = findViewById(R.id.btnManageTestimonials)
         authorInput = findViewById(R.id.etAuthorName)
         testimonialInput = findViewById(R.id.etTestimonial)
         serviceSpinner = findViewById(R.id.spinnerServices)
@@ -58,11 +56,7 @@ class PortfolioActivity : BaseDrawerActivity() {
 
         manageButton.visibility = if (AdminSession.isLoggedIn) View.VISIBLE else View.GONE
         manageButton.setOnClickListener {
-            startActivity(Intent(this, AdminPortfolioManageActivity::class.java))
-        }
-        manageTestimonialsButton.visibility = if (AdminSession.isLoggedIn) View.VISIBLE else View.GONE
-        manageTestimonialsButton.setOnClickListener {
-            startActivity(Intent(this, AdminTestimonialsActivity::class.java))
+            startActivity(AdminDashboardActivity.intent(this, initialView = AdminDashboardActivity.ViewMode.ANALYTICS))
         }
 
         ratingSpinner.adapter = ArrayAdapter(
@@ -98,7 +92,6 @@ class PortfolioActivity : BaseDrawerActivity() {
     override fun onResume() {
         super.onResume()
         manageButton.visibility = if (AdminSession.isLoggedIn) View.VISIBLE else View.GONE
-        manageTestimonialsButton.visibility = if (AdminSession.isLoggedIn) View.VISIBLE else View.GONE
         if (authorInput.text.isNullOrBlank()) {
             authorInput.setText(UserSession.displayName)
         }
