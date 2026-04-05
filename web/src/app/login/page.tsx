@@ -96,7 +96,7 @@ function LoginContent() {
             href={siteConfig.privacyPolicyUrl}
             target="_blank"
             rel="noopener noreferrer"
-            className="text-[#5a5872] underline underline-offset-2"
+            className="font-semibold text-[#5a5872] underline underline-offset-2"
           >
             Privacy Policy
           </a>
