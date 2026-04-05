@@ -3,6 +3,8 @@ from rest_framework_simplejwt.views import TokenRefreshView
 
 from .views import (
     AccountDeletionView,
+    PasswordResetConfirmView,
+    PasswordResetRequestView,
     AdminAddOnDetailView,
     AdminAddOnListCreateView,
     AdminAppointmentListCreateView,
@@ -43,6 +45,8 @@ urlpatterns = [
     path("auth/login", LoginView.as_view(), name="auth-login"),
     path("auth/token/refresh", TokenRefreshView.as_view(), name="token-refresh"),
     path("auth/account", AccountDeletionView.as_view(), name="auth-account-delete"),
+    path("auth/password-reset", PasswordResetRequestView.as_view(), name="password-reset-request"),
+    path("auth/password-reset/confirm", PasswordResetConfirmView.as_view(), name="password-reset-confirm"),
 
     path("home-content", HomeContentView.as_view(), name="home-content"),
     path("services", ServiceListView.as_view(), name="services-list"),

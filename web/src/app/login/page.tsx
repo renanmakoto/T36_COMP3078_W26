@@ -73,6 +73,11 @@ function LoginContent() {
           />
         </div>
         {error && <p className="text-sm text-red-600">{error}</p>}
+        <div className="text-right">
+          <Link href="/forgot-password" className="text-sm text-[#5b4fe5] hover:underline">
+            Forgot password?
+          </Link>
+        </div>
         <button
           type="submit"
           disabled={loading}

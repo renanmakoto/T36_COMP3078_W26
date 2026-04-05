@@ -252,6 +252,28 @@ export async function apiDeleteAccount(): Promise<AccountDeletionResult> {
   return res.json();
 }
 
+export async function apiRequestPasswordReset(email: string): Promise<string> {
+  const res = await fetch(`${API}/auth/password-reset`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email }),
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.detail || 'Failed to request password reset.');
+  return data.detail;
+}
+
+export async function apiResetPassword(token: string, password: string): Promise<string> {
+  const res = await fetch(`${API}/auth/password-reset/confirm`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ token, password }),
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.detail || data.password?.[0] || 'Failed to reset password.');
+  return data.detail;
+}
+
 export async function apiGetHomeContent(): Promise<HomeContentData> {
   const res = await fetch(`${API}/home-content`);
   if (!res.ok) throw new Error('Failed to load home content.');

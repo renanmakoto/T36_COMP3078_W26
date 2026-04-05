@@ -266,6 +266,83 @@ class LoginView(TokenObtainPairView):
     permission_classes = [AllowAny]
 
 
+PASSWORD_RESET_TOKEN_SALT = "password-reset"
+PASSWORD_RESET_TOKEN_MAX_AGE = 60 * 60  # 1 hour
+
+
+class PasswordResetRequestView(APIView):
+    authentication_classes = []
+    permission_classes = [AllowAny]
+
+    def post(self, request):
+        email = (request.data.get("email") or "").strip().lower()
+        if not email:
+            raise ValidationError({"email": "Email is required."})
+
+        user = User.objects.filter(email=email, is_active=True).first()
+        if not user:
+            return Response({"detail": "If that email exists, a reset link was sent."})
+
+        token = signing.dumps(
+            {"user_id": str(user.id), "email": user.email},
+            salt=PASSWORD_RESET_TOKEN_SALT,
+        )
+        reset_url = f"{settings.FRONTEND_BASE_URL}/reset-password?token={token}"
+
+        if settings.RESEND_API_KEY and settings.RESEND_FROM_EMAIL:
+            try:
+                resend.api_key = settings.RESEND_API_KEY
+                resend.Emails.send({
+                    "from": f"{getattr(settings, 'BUSINESS_NAME', 'Brazdes')} <{settings.RESEND_FROM_EMAIL}>",
+                    "to": [user.email],
+                    "subject": "Reset your password",
+                    "html": (
+                        f"<p>Hi {user.display_name or user.email.split('@')[0]},</p>"
+                        f"<p>Click the link below to reset your password. This link expires in 1 hour.</p>"
+                        f"<p><a href='{reset_url}'>Reset password</a></p>"
+                        f"<p>If you did not request this, ignore this email.</p>"
+                    ),
+                    "text": f"Reset your password: {reset_url}\n\nThis link expires in 1 hour.",
+                })
+            except Exception:
+                pass
+
+        return Response({"detail": "If that email exists, a reset link was sent."})
+
+
+class PasswordResetConfirmView(APIView):
+    authentication_classes = []
+    permission_classes = [AllowAny]
+
+    def post(self, request):
+        token = request.data.get("token", "")
+        new_password = request.data.get("password", "")
+
+        if not token or not new_password:
+            raise ValidationError({"detail": "Token and password are required."})
+
+        if len(new_password) < 8:
+            raise ValidationError({"password": "Password must be at least 8 characters."})
+
+        try:
+            payload = signing.loads(
+                token,
+                salt=PASSWORD_RESET_TOKEN_SALT,
+                max_age=PASSWORD_RESET_TOKEN_MAX_AGE,
+            )
+        except (signing.BadSignature, signing.SignatureExpired):
+            raise ValidationError({"detail": "Invalid or expired reset link."})
+
+        user = User.objects.filter(id=payload["user_id"], email=payload["email"], is_active=True).first()
+        if not user:
+            raise ValidationError({"detail": "Invalid or expired reset link."})
+
+        user.set_password(new_password)
+        user.save(update_fields=["password"])
+
+        return Response({"detail": "Password reset successfully."})
+
+
 class AccountDeletionView(APIView):
     permission_classes = [IsAuthenticated]
 
