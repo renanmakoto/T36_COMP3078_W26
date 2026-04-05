@@ -436,7 +436,7 @@ export default function AdminServicesPage() {
                     <Link
                     href={service.image_url}
                     target="_blank"
-                    className="rounded-full border border-[#ecebf5] px-3 py-1 text-xs font-medium text-[#1a132f]"
+                    className="inline-flex items-center rounded-full border border-[#ecebf5] px-3 py-1.5 text-xs font-medium leading-none text-[#1a132f]"
                     >
                       Preview image
                     </Link>
