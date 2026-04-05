@@ -156,7 +156,7 @@
             android:textColor="@color/brand_muted"
             android:textSize="13sp"
             android:textStyle="bold"
-            android:textDecoration="underline" />
+            android:paintFlags="8" />
 
         <com.google.android.material.card.MaterialCardView
             android:layout_width="match_parent"
