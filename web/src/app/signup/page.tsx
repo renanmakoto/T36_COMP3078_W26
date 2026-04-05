@@ -23,6 +23,7 @@ function SignUpContent() {
   const search = useSearchParams();
   const [displayName, setDisplayName] = useState('');
   const [email, setEmail] = useState('');
+  const [phone, setPhone] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
@@ -32,7 +33,7 @@ function SignUpContent() {
     setError('');
     setLoading(true);
     try {
-      await apiRegister(email, password, displayName);
+      await apiRegister(email, password, displayName, phone);
       const next = search.get('next');
       router.push(next ? `/login?next=${encodeURIComponent(next)}` : '/login');
     } catch (err: unknown) {
@@ -69,6 +70,16 @@ function SignUpContent() {
             className="mt-1 w-full rounded-xl border border-[#e5e4ef] bg-white px-3 py-3 text-sm outline-none ring-[#5b4fe5]/40 focus:ring-2"
             type="email"
             required
+          />
+        </div>
+        <div>
+          <label className="text-sm font-semibold text-[#1a132f]">Phone</label>
+          <input
+            value={phone}
+            onChange={(e) => setPhone(e.target.value)}
+            className="mt-1 w-full rounded-xl border border-[#e5e4ef] bg-white px-3 py-3 text-sm outline-none ring-[#5b4fe5]/40 focus:ring-2"
+            type="tel"
+            placeholder="Phone number"
           />
         </div>
         <div>

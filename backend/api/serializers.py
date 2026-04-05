@@ -18,13 +18,14 @@ User = get_user_model()
 class UserSerializer(serializers.ModelSerializer):
     class Meta:
         model = User
-        fields = ("id", "email", "display_name", "role", "is_active", "created_at")
+        fields = ("id", "email", "display_name", "phone", "role", "is_active", "created_at")
 
 
 class RegisterSerializer(serializers.Serializer):
     email = serializers.EmailField()
     password = serializers.CharField(write_only=True, min_length=8)
     display_name = serializers.CharField(required=False, allow_blank=True, max_length=255)
+    phone = serializers.CharField(required=False, allow_blank=True, max_length=50)
 
     def validate_email(self, value: str) -> str:
         email = value.strip().lower()
@@ -39,19 +40,22 @@ class RegisterSerializer(serializers.Serializer):
         email = validated_data["email"]
         password = validated_data["password"]
         display_name = validated_data.get("display_name", "").strip()
+        phone = validated_data.get("phone", "").strip()
 
         existing = User.objects.filter(email__iexact=email).first()
         if existing:
             existing.display_name = display_name or existing.display_name
+            existing.phone = phone or existing.phone
             existing.role = User.Role.USER
             existing.set_password(password)
-            existing.save(update_fields=["display_name", "role", "password"])
+            existing.save(update_fields=["display_name", "phone", "role", "password"])
             return existing
 
         return User.objects.create_user(
             email=email,
             password=password,
             display_name=display_name,
+            phone=phone,
             role=User.Role.USER,
         )
 

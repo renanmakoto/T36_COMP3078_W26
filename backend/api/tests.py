@@ -306,3 +306,25 @@ class AdminContentManagementTests(TestCase):
 
         self.assertEqual(response.status_code, 204)
         self.assertFalse(BlogPost.objects.filter(id=post.id).exists())
+
+
+class RegistrationTests(TestCase):
+    def setUp(self):
+        self.client = APIClient()
+
+    def test_register_saves_phone(self):
+        response = self.client.post(
+            "/auth/register",
+            {
+                "display_name": "Client",
+                "email": "client@example.com",
+                "phone": "+1 555 123 4567",
+                "password": "Test1234!",
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 201)
+        self.assertEqual(response.data["phone"], "+1 555 123 4567")
+        user = User.objects.get(email="client@example.com")
+        self.assertEqual(user.phone, "+1 555 123 4567")

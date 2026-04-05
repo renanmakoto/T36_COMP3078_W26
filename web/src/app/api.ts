@@ -66,6 +66,7 @@ export type UserData = {
   id: string;
   email: string;
   display_name: string;
+  phone: string;
   role: 'USER' | 'ADMIN';
 };
 
@@ -229,11 +230,11 @@ export async function apiLogin(email: string, password: string): Promise<LoginRe
   return res.json();
 }
 
-export async function apiRegister(email: string, password: string, displayName = ''): Promise<UserData> {
+export async function apiRegister(email: string, password: string, displayName = '', phone = ''): Promise<UserData> {
   const res = await fetch(`${API}/auth/register`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ email, password, display_name: displayName }),
+    body: JSON.stringify({ email, password, display_name: displayName, phone }),
   });
   if (!res.ok) {
     throw new Error(await parseError(res, 'Registration failed.'));
