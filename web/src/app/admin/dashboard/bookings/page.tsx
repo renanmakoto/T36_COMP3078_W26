@@ -470,7 +470,7 @@ export default function AdminBookingsPage() {
               sortedAppointments.map((appointment) => (
                 <EditableRow
                   key={appointment.id}
-                  title={<>{appointment.user.display_name || appointment.user.email}{appointment.user.phone ? <span className="text-[#9b97b0]"> {appointment.user.phone}</span> : null} - {appointment.service.name}</>}
+                  title={<>{appointment.user.display_name || appointment.user.email} - {appointment.service.name}{appointment.user.phone ? <span className="text-[#9b97b0]"> | {appointment.user.phone}</span> : null}</>}
                   subtitle={`${formatDateTime(appointment.start_time)} - ${formatCurrency(
                     appointment.total_price_cents,
                   )} - ${appointment.add_ons.map((item) => item.name).join(', ') || 'No add-ons'}`}
