@@ -6,4 +6,5 @@ export const siteConfig = {
   address: '230 Woolner Avenue, Toronto, ON',
   bookingWindow: '10:00 AM to 7:00 PM Toronto time',
   paymentMethods: ['Cash', 'E-transfer', 'Card'],
+  privacyPolicyUrl: 'https://stuaarts.github.io/PrivacyPolicy/',
 };

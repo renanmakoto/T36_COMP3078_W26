@@ -31,6 +31,18 @@ export default function RootLayout({
         <SessionProvider>
           <Header />
           <main className="mx-auto max-w-6xl px-4 pb-16 pt-8 sm:px-6">{children}</main>
+          <footer className="border-t border-[#e6e6e6] bg-white/80">
+            <div className="mx-auto flex max-w-6xl items-center justify-center px-4 py-4 text-sm text-[#5a5872] sm:px-6">
+              <a
+                href={siteConfig.privacyPolicyUrl}
+                target="_blank"
+                rel="noreferrer"
+                className="font-medium text-[#1a132f] underline decoration-[#d6d1f5] underline-offset-4 hover:decoration-[#1a132f]"
+              >
+                Privacy Policy
+              </a>
+            </div>
+          </footer>
           <FrameSync />
         </SessionProvider>
       </body>
