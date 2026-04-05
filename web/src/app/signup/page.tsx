@@ -96,6 +96,7 @@ function SignUpContent() {
             inputMode="numeric"
             autoComplete="tel"
             placeholder="+1 (437) 555-1234"
+            required
           />
         </div>
         <div>
