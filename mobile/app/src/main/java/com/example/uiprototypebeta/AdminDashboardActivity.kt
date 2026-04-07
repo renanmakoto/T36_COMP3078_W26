@@ -6,6 +6,7 @@ import android.content.ActivityNotFoundException
 import android.content.ClipData
 import android.content.Context
 import android.content.Intent
+import android.graphics.Bitmap
 import android.net.Uri
 import android.os.Bundle
 import android.view.View
@@ -21,14 +22,15 @@ import androidx.activity.result.contract.ActivityResultContracts
 import org.json.JSONObject
 
 class AdminDashboardActivity : BaseDrawerActivity() {
+    private val bootstrapPath = "/mobile-admin-bootstrap"
 
     private lateinit var progressBar: ProgressBar
     private lateinit var webView: WebView
 
-    private var injectedSession = false
-    private var visitedProtectedPage = false
     private var fileChooserCallback: ValueCallback<Array<Uri>>? = null
     private var returningToPrimarySignIn = false
+    private var sessionExitHandled = false
+    private var bootstrapAttempts = 0
 
     private val filePickerLauncher =
         registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
@@ -66,6 +68,8 @@ class AdminDashboardActivity : BaseDrawerActivity() {
 
         progressBar = findViewById(R.id.progressBar)
         webView = findViewById(R.id.webView)
+        webView.visibility = View.INVISIBLE
+        progressBar.visibility = View.VISIBLE
 
         webView.settings.javaScriptEnabled = true
         webView.settings.domStorageEnabled = true
@@ -102,41 +106,44 @@ class AdminDashboardActivity : BaseDrawerActivity() {
             }
         }
         webView.webViewClient = object : WebViewClient() {
+            override fun onPageStarted(view: WebView?, url: String?, favicon: Bitmap?) {
+                progressBar.visibility = View.VISIBLE
+                if (isBootstrapPage(url) || isLoginPage(url)) {
+                    webView.visibility = View.INVISIBLE
+                }
+            }
+
             override fun onPageFinished(view: WebView?, url: String?) {
-                progressBar.visibility = View.GONE
-
-                if (injectedSession && visitedProtectedPage && isLoginPage(url)) {
-                    returnToPrimarySignIn()
+                if (returningToPrimarySignIn || sessionExitHandled) {
+                    progressBar.visibility = View.GONE
                     return
                 }
 
-                if (!injectedSession && AdminSession.isLoggedIn && view != null && isLoginPage(url)) {
-                    injectedSession = true
-                    view.evaluateJavascript(
-                        """
-                        (() => {
-                          localStorage.setItem('hb-access', ${jsString(ApiClient.accessToken.orEmpty())});
-                          localStorage.setItem('hb-refresh', ${jsString(ApiClient.refreshToken.orEmpty())});
-                          localStorage.setItem('hb-role', 'admin');
-                          localStorage.setItem('hb-name', ${jsString(AdminSession.displayName.ifBlank { "Admin" })});
-                          window.location.replace(${jsString("${ApiClient.webBaseUrl}$pagePath")});
-                        })();
-                        """.trimIndent(),
-                        null
-                    )
+                if (isBootstrapPage(url)) {
+                    progressBar.visibility = View.VISIBLE
                     return
                 }
 
-                if (injectedSession && !isLoginPage(url)) {
-                    visitedProtectedPage = true
+                if (isLoginPage(url)) {
+                    if (AdminSession.isLoggedIn && bootstrapAttempts < 3) {
+                        loadBootstrapDocument()
+                    } else {
+                        returnToPrimarySignIn()
+                    }
+                    return
                 }
+
+                bootstrapAttempts = 0
 
                 if (view != null) {
                     injectMobileAdminWebGuards(view)
                 }
+
+                webView.visibility = View.VISIBLE
+                progressBar.visibility = View.GONE
             }
         }
-        webView.loadUrl("${ApiClient.webBaseUrl}/login")
+        loadBootstrapDocument()
 
         onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
             override fun handleOnBackPressed() {
@@ -162,6 +169,12 @@ class AdminDashboardActivity : BaseDrawerActivity() {
         super.onDestroy()
     }
 
+    override fun onBeforeLogout() {
+        sessionExitHandled = true
+        returningToPrimarySignIn = true
+        prepareForExit()
+    }
+
     private fun ensureAdminSession(): Boolean {
         if (AdminSession.isLoggedIn) {
             return true
@@ -177,7 +190,61 @@ class AdminDashboardActivity : BaseDrawerActivity() {
         return path == "/login" || path == "/admin/login"
     }
 
+    private fun isBootstrapPage(url: String?): Boolean {
+        if (url.isNullOrBlank()) return false
+        val path = runCatching { Uri.parse(url).path.orEmpty() }.getOrDefault("")
+        return path == bootstrapPath
+    }
+
     private fun jsString(value: String): String = JSONObject.quote(value)
+
+    private fun loadBootstrapDocument() {
+        bootstrapAttempts += 1
+        webView.visibility = View.INVISIBLE
+        progressBar.visibility = View.VISIBLE
+        webView.loadDataWithBaseURL(
+            "${ApiClient.webBaseUrl}$bootstrapPath",
+            buildBootstrapHtml(),
+            "text/html",
+            "utf-8",
+            null
+        )
+    }
+
+    private fun buildBootstrapHtml(): String {
+        return """
+            <!DOCTYPE html>
+            <html lang="en">
+              <head>
+                <meta charset="utf-8" />
+                <meta name="viewport" content="width=device-width, initial-scale=1" />
+                <style>
+                  html, body {
+                    margin: 0;
+                    height: 100%;
+                    background: #f5f6fb;
+                  }
+                </style>
+              </head>
+              <body>
+                <script>
+                  (() => {
+                    try {
+                      localStorage.setItem('hb-access', ${jsString(ApiClient.accessToken.orEmpty())});
+                      localStorage.setItem('hb-refresh', ${jsString(ApiClient.refreshToken.orEmpty())});
+                      localStorage.setItem('hb-role', 'admin');
+                      localStorage.setItem('hb-name', ${jsString(AdminSession.displayName.ifBlank { "Admin" })});
+                      window.__hbMobileAdminExitReason = null;
+                    } catch (_) {}
+                    setTimeout(() => {
+                      window.location.replace(${jsString("${ApiClient.webBaseUrl}$pagePath")});
+                    }, 0);
+                  })();
+                </script>
+              </body>
+            </html>
+        """.trimIndent()
+    }
 
     private fun buildFileChooserIntent(params: WebChromeClient.FileChooserParams): Intent {
         val mimeTypes = params.acceptTypes
@@ -222,6 +289,7 @@ class AdminDashboardActivity : BaseDrawerActivity() {
               const bridge = window.AndroidSessionBridge;
               if (!bridge) return;
               const targetUrl = ${jsString("${ApiClient.webBaseUrl}$pagePath")};
+              let exitReason = window.__hbMobileAdminExitReason || null;
 
               const clearSession = () => {
                 try {
@@ -240,6 +308,9 @@ class AdminDashboardActivity : BaseDrawerActivity() {
               };
 
               const notifyLogout = (reason) => {
+                if (exitReason) return;
+                exitReason = reason;
+                window.__hbMobileAdminExitReason = reason;
                 if (reason === 'expired') {
                   if (typeof bridge.onSessionExpired === 'function') {
                     bridge.onSessionExpired();
@@ -254,6 +325,10 @@ class AdminDashboardActivity : BaseDrawerActivity() {
                 const path = window.location.pathname || '';
                 const access = localStorage.getItem('hb-access');
                 const role = localStorage.getItem('hb-role');
+
+                if (exitReason) {
+                  return;
+                }
 
                 if (path === '/login' || path === '/admin/login') {
                   if (access && role === 'admin') {
@@ -275,7 +350,7 @@ class AdminDashboardActivity : BaseDrawerActivity() {
                 const originalFetch = window.fetch.bind(window);
                 window.fetch = async (...args) => {
                   const response = await originalFetch(...args);
-                  if (response.status === 401) {
+                  if (response.status === 401 && !exitReason) {
                     clearSession();
                     setTimeout(() => notifyLogout('expired'), 0);
                   }
@@ -301,8 +376,8 @@ class AdminDashboardActivity : BaseDrawerActivity() {
                     const target = event.target instanceof Element ? event.target.closest('button') : null;
                     const label = target?.textContent?.trim().toLowerCase() || '';
                     if (target && label.includes('sign out')) {
+                      notifyLogout('logout');
                       clearSession();
-                      setTimeout(() => notifyLogout('logout'), 0);
                     }
                   },
                   true,
@@ -321,9 +396,25 @@ class AdminDashboardActivity : BaseDrawerActivity() {
         )
     }
 
+    private fun prepareForExit() {
+        if (::progressBar.isInitialized) {
+            progressBar.visibility = View.GONE
+        }
+        fileChooserCallback?.onReceiveValue(null)
+        fileChooserCallback = null
+        if (::webView.isInitialized) {
+            runCatching {
+                webView.stopLoading()
+                webView.loadUrl("about:blank")
+            }
+        }
+    }
+
     private fun returnToPrimarySignIn() {
         if (returningToPrimarySignIn) return
         returningToPrimarySignIn = true
+        sessionExitHandled = true
+        prepareForExit()
         AppSessionStore.clear(this)
         startActivity(Intent(this, LoginActivity::class.java).apply {
             addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK)
@@ -350,13 +441,18 @@ class AdminDashboardActivity : BaseDrawerActivity() {
     private inner class AndroidSessionBridge {
         @JavascriptInterface
         fun onLogout() {
-            runOnUiThread { returnToPrimarySignIn() }
+            runOnUiThread {
+                if (sessionExitHandled) return@runOnUiThread
+                sessionExitHandled = true
+                returnToPrimarySignIn()
+            }
         }
 
         @JavascriptInterface
         fun onSessionExpired() {
             runOnUiThread {
-                if (returningToPrimarySignIn) return@runOnUiThread
+                if (sessionExitHandled || returningToPrimarySignIn) return@runOnUiThread
+                sessionExitHandled = true
                 Toast.makeText(
                     this@AdminDashboardActivity,
                     "Session expired. Please sign in again.",

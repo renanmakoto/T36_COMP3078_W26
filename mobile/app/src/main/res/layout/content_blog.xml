@@ -15,7 +15,6 @@
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:gravity="center_vertical"
             android:orientation="horizontal">
 
             <TextView
@@ -27,18 +26,6 @@
                 android:textColor="@color/brand_text"
                 android:textSize="22sp"
                 android:textStyle="bold" />
-
-            <com.google.android.material.button.MaterialButton
-                android:id="@+id/btnManageBlog"
-                android:layout_width="wrap_content"
-                android:layout_height="36dp"
-                android:minHeight="36dp"
-                android:insetTop="0dp"
-                android:insetBottom="0dp"
-                android:text="Manage"
-                android:textAllCaps="false"
-                android:textSize="12sp"
-                android:visibility="gone" />
         </LinearLayout>
 
         <TextView

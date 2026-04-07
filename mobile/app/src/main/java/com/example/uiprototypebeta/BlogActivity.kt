@@ -3,20 +3,17 @@ package com.brazwebdes.hairstylistbooking
 import android.content.Intent
 import android.graphics.Typeface
 import android.os.Bundle
-import android.view.View
 import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.TextView
 import android.widget.Toast
 import androidx.core.content.ContextCompat
 import coil.load
-import com.google.android.material.button.MaterialButton
 import com.google.android.material.card.MaterialCardView
 
 class BlogActivity : BaseDrawerActivity() {
 
     private lateinit var postsContainer: LinearLayout
-    private lateinit var manageButton: MaterialButton
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -25,25 +22,7 @@ class BlogActivity : BaseDrawerActivity() {
         setCheckedDrawerItem(R.id.m_blog)
 
         postsContainer = findViewById(R.id.llPosts)
-        manageButton = findViewById(R.id.btnManageBlog)
-
-        manageButton.visibility = if (AdminSession.isLoggedIn) View.VISIBLE else View.GONE
-        manageButton.setOnClickListener {
-            startActivity(
-                AdminDashboardActivity.intent(
-                    context = this,
-                    title = "Blog",
-                    path = "/admin/dashboard/blog"
-                )
-            )
-        }
-
         loadPosts()
-    }
-
-    override fun onResume() {
-        super.onResume()
-        manageButton.visibility = if (AdminSession.isLoggedIn) View.VISIBLE else View.GONE
     }
 
     private fun loadPosts() {

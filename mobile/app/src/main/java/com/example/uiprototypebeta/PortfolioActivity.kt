@@ -20,7 +20,6 @@ class PortfolioActivity : BaseDrawerActivity() {
     private lateinit var portfolioContainer: LinearLayout
     private lateinit var testimonialsContainer: LinearLayout
     private lateinit var viewMoreTestimonialsButton: MaterialButton
-    private lateinit var manageButton: MaterialButton
     private lateinit var authorInput: TextInputEditText
     private lateinit var testimonialInput: TextInputEditText
     private lateinit var serviceSpinner: Spinner
@@ -42,7 +41,6 @@ class PortfolioActivity : BaseDrawerActivity() {
         portfolioContainer = findViewById(R.id.llPortfolioItems)
         testimonialsContainer = findViewById(R.id.llTestimonials)
         viewMoreTestimonialsButton = findViewById(R.id.btnViewMoreTestimonials)
-        manageButton = findViewById(R.id.btnManagePortfolio)
         authorInput = findViewById(R.id.etAuthorName)
         testimonialInput = findViewById(R.id.etTestimonial)
         serviceSpinner = findViewById(R.id.spinnerServices)
@@ -52,17 +50,6 @@ class PortfolioActivity : BaseDrawerActivity() {
         submitMessage = findViewById(R.id.tvSubmitMessage)
 
         authorInput.setText(UserSession.displayName)
-
-        manageButton.visibility = if (AdminSession.isLoggedIn) android.view.View.VISIBLE else android.view.View.GONE
-        manageButton.setOnClickListener {
-            startActivity(
-                AdminDashboardActivity.intent(
-                    context = this,
-                    title = "Portfolio and reviews",
-                    path = "/admin/dashboard/portfolio"
-                )
-            )
-        }
 
         ratingSpinner.adapter = ArrayAdapter(
             this,
@@ -91,7 +78,6 @@ class PortfolioActivity : BaseDrawerActivity() {
 
     override fun onResume() {
         super.onResume()
-        manageButton.visibility = if (AdminSession.isLoggedIn) android.view.View.VISIBLE else android.view.View.GONE
         if (authorInput.text.isNullOrBlank()) {
             authorInput.setText(UserSession.displayName)
         }

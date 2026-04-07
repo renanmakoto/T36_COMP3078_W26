@@ -173,6 +173,7 @@ open class BaseDrawerActivity : AppCompatActivity() {
     private fun performLogout() {
         clearNavSelection()
         showLogoutOption(false)
+        onBeforeLogout()
         AppSessionStore.clear(this)
         syncAuthUi()
         drawerLayout.closeDrawer(GravityCompat.END)
@@ -182,6 +183,8 @@ open class BaseDrawerActivity : AppCompatActivity() {
         startActivity(intent)
         finish()
     }
+
+    protected open fun onBeforeLogout() = Unit
 
     protected fun showLogoutOption(visible: Boolean) {
         navView.menu.findItem(R.id.m_logout)?.isVisible = visible

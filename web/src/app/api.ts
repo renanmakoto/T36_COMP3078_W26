@@ -1,4 +1,5 @@
 const API = process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:8000';
+const SESSION_CHANGE_EVENT = 'hb-session-change';
 
 function getAccessToken(): string | null {
   if (typeof window === 'undefined') return null;
@@ -18,6 +19,14 @@ export function setTokens(access: string, refresh: string) {
 export function clearTokens() {
   localStorage.removeItem('hb-access');
   localStorage.removeItem('hb-refresh');
+}
+
+export function clearSessionState() {
+  clearTokens();
+  if (typeof window === 'undefined') return;
+  localStorage.removeItem('hb-role');
+  localStorage.removeItem('hb-name');
+  window.dispatchEvent(new Event(SESSION_CHANGE_EVENT));
 }
 
 async function parseError(res: Response, fallback: string): Promise<string> {
@@ -56,8 +65,15 @@ async function authFetch(path: string, options: RequestInit = {}): Promise<Respo
         const data = await refreshRes.json();
         setTokens(data.access, refresh);
         res = await rawFetch(path, data.access, options);
+      } else {
+        clearSessionState();
       }
+    } else {
+      clearSessionState();
     }
+  }
+  if (res.status === 401) {
+    clearSessionState();
   }
   return res;
 }

@@ -42,8 +42,8 @@ android {
         applicationId = "com.brazwebdes.hairstylistbooking"
         minSdk = 24
         targetSdk = 36
-        versionCode = 19
-        versionName = "19"
+        versionCode = 21
+        versionName = "21"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 

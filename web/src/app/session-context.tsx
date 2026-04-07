@@ -1,7 +1,7 @@
 'use client';
 
 import { createContext, useContext, useMemo, useSyncExternalStore } from 'react';
-import { apiLogin as apiLoginCall, clearTokens, setTokens, type LoginResult } from './api';
+import { apiLogin as apiLoginCall, clearSessionState, clearTokens, setTokens, type LoginResult } from './api';
 
 type Role = 'guest' | 'user' | 'admin';
 
@@ -118,10 +118,7 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
       },
 
       logout: () => {
-        clearTokens();
-        localStorage.removeItem('hb-role');
-        localStorage.removeItem('hb-name');
-        emitSessionChange();
+        clearSessionState();
       },
     }),
     [snapshot.displayName, snapshot.isReady, snapshot.role],
